@@ -127,7 +127,8 @@ try:
         with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
             df_final.drop(columns=['Date Created DT']).to_excel(writer, index=False)
         
-        st.download_button("📥 DOWNLOAD DATA CLEANSING", output.getvalue(), "wsa_dark_report.xlsx")
+        st.download_button("📥 DOWNLOAD DATA CLEANSING", output.getvalue(), "wsa_report.xlsx")
 
 except Exception as e:
     st.error(f"Terjadi kesalahan: {e}")
+
