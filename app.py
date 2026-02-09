@@ -14,14 +14,15 @@ scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/au
 
 @st.cache_resource
 def get_gspread_client():
-    # Menggunakan nama file json yang baru diupload
+    # Menggunakan nama file json yang Anda upload
     json_file = "pengolahan.json"
     
     with open(json_file) as f:
         info = json.load(f)
     
-    # Memperbaiki format private_key jika ada karakter yang rusak
-    info['private_key'] = info['private_key'].replace('\\n', '\n')
+    # PERBAIKAN PENTING: Memastikan private_key terbaca dengan format baris baru yang benar
+    if 'private_key' in info:
+        info['private_key'] = info['private_key'].replace('\\n', '\n')
     
     creds = ServiceAccountCredentials.from_json_keyfile_dict(info, scope)
     return gspread.authorize(creds)
@@ -39,7 +40,7 @@ try:
             # Filter AO/PDA/WSA
             data_filtered = data[data['SC Order No/Track ID/CSRM No'].astype(str).str.contains('AO|PDA|WSA', na=False)].copy()
             
-            # Format Tanggal
+            # Format Tanggal agar bersih
             if 'Date Created' in data_filtered.columns:
                 data_filtered['Date Created'] = data_filtered['Date Created'].astype(str).str.split('.').str[0]
             
@@ -55,7 +56,7 @@ try:
             else:
                 unique_data = data_filtered
 
-            st.write(f"### Hasil: {len(unique_data)} Data Unik ditemukan")
+            st.write(f"### Hasil: {len(unique_data)} Data Baru Unik")
             st.dataframe(unique_data)
 
             # Tombol Download
@@ -72,3 +73,4 @@ try:
 
 except Exception as e:
     st.error(f"Terjadi kesalahan: {e}")
+    st.info("Pastikan file pengolahan.json di GitHub isinya sama persis dengan file asli.")
