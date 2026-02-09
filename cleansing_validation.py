@@ -1,123 +1,149 @@
+import streamlit as st
 import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
+import io
+from datetime import datetime
 
-# Setup credentials untuk akses Google Sheets API
-scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-creds = ServiceAccountCredentials.from_json_keyfile_name(r"C:\Users\BAYU\Downloads\project-pengolahan-data-62bff7107e8e.json", scope)
-client = gspread.authorize(creds)
+# --- KONFIGURASI HALAMAN & TEMA GELAP ---
+st.set_page_config(page_title="WSA Pro Dashboard", layout="wide")
 
-# Path ke file Excel input dan output
-input_file = 'report (1).xlsx'  # Ganti dengan nama file Excel Anda
-output_file = 'data validasi ODP PSB belum ada di gdoc.xlsx'  # Nama file untuk menyimpan hasil
+st.markdown("""
+    <style>
+    .stApp { background-color: #0e1117; color: #ffffff; }
+    [data-testid="stSidebar"] { background-color: #1a1c24; }
+    .metric-card {
+        background-color: #1e2129;
+        padding: 20px;
+        border-radius: 12px;
+        border-top: 4px solid #00d4ff;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+        margin-bottom: 20px;
+        text-align: center;
+    }
+    h1, h2, h3 { color: #00d4ff !important; }
+    [data-testid="stFileUploader"] {
+        background-color: #1a1c24;
+        border: 2px dashed #00d4ff;
+        border-radius: 15px;
+    }
+    .stDownloadButton button {
+        background: linear-gradient(45deg, #00d4ff, #008fb3) !important;
+        color: #000000 !important;
+        font-weight: bold !important;
+        width: 100%;
+        border: none;
+        padding: 10px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-# Step 1: Membaca file Excel
-data = pd.read_excel(input_file)
+# --- KONEKSI KE GOOGLE SHEETS VIA SECRETS ---
+@st.cache_resource
+def get_gspread_client():
+    try:
+        # Mengambil data dari Streamlit Secrets (Bukan file file .json)
+        secret_info = st.secrets["gcp_service_account"]
+        
+        # Memperbaiki format private key (mengembalikan karakter \n)
+        info_dict = dict(secret_info)
+        info_dict['private_key'] = info_dict['private_key'].replace('\\n', '\n')
+        
+        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+        creds = ServiceAccountCredentials.from_json_keyfile_dict(info_dict, scope)
+        return gspread.authorize(creds)
+    except Exception as e:
+        st.error(f"Koneksi GDoc Gagal. Pastikan Secrets sudah diisi! Error: {e}")
+        return None
 
-# Filter data yang hanya mengandung 'WSA' pada kolom 'SC Order No/Track ID/CSRM No'
-data = data[data['SC Order No/Track ID/CSRM No'].astype(str).str.contains('AO|PDA|WSA', na=False)]
+# --- LOGIKA BULAN OTOMATIS ---
+curr_month = datetime.now().month
+prev_month = curr_month - 1 if curr_month > 1 else 12
+default_months = [prev_month, curr_month]
 
-# Menyiapkan DataFrame untuk data yang akan disimpan
-processed_data = pd.DataFrame()
+# --- SIDEBAR CONTROL ---
+with st.sidebar:
+    st.title("⚙️ WSA Control")
+    st.markdown("---")
+    selected_months = st.multiselect(
+        "📅 Periode Bulan:", 
+        options=list(range(1, 13)), 
+        default=default_months,
+        format_func=lambda x: ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"][x-1]
+    )
 
-# 1. Menghilangkan '.0' pada kolom Date Created dan mengubahnya menjadi datetime
-data['Date Created'] = data['Date Created'].astype(str).str.split('.').str[0]
-processed_data['Date Created'] = pd.to_datetime(data['Date Created'], format='%Y-%m-%d %H:%M:%S', errors='coerce')
+st.title("⚡ WSA FULFILLMENT ANALYTICS")
+st.write(f"Mode: **Otomasi Validasi GDoc** | Periode aktif: {datetime.now().strftime('%B %Y')}")
 
-# 2. Menyalin kolom Workorder
-processed_data['Workorder'] = data['Workorder']
+# --- PROSES UTAMA ---
+client = get_gspread_client()
 
-# 3. Memisahkan kolom SC Order
-processed_data['SC Order No/Track ID/CSRM No'] = data['SC Order No/Track ID/CSRM No'].apply(lambda x: x.split('_')[0] if isinstance(x, str) else x)
+if client:
+    uploaded_file = st.file_uploader("DROP FILE XLSX / CSV DI SINI", type=["xlsx", "xls", "csv"])
 
-def safe_split_part2(x):
-    if isinstance(x, str) and '-' in x:
-        parts = x.split('-')
-        if len(parts) > 1:
-            subparts = parts[1].split('_')
-            if len(subparts) > 0:
-                return subparts[0]
-    return None
+    if uploaded_file:
+        # Baca file
+        if uploaded_file.name.lower().endswith('.csv'):
+            df = pd.read_csv(uploaded_file)
+        else:
+            df = pd.read_excel(uploaded_file)
+        
+        col_id = 'SC Order No/Track ID/CSRM No'
+        
+        if col_id in df.columns:
+            # 1. Filter AO/PDA/WSA & CRM Order Type
+            df = df[df[col_id].astype(str).str.contains('AO|PDA|WSA', na=False)].copy()
+            if 'CRM Order Type' in df.columns:
+                df = df[df['CRM Order Type'].isin(['CREATE', 'MIGRATE'])]
 
-processed_data['SC Order No/Track ID/CSRM No 2'] = data['SC Order No/Track ID/CSRM No'].apply(safe_split_part2)
+            # 2. Filter Bulan & Format Tanggal
+            df['Date Created DT'] = pd.to_datetime(df['Date Created'], errors='coerce')
+            if selected_months:
+                df = df[df['Date Created DT'].dt.month.isin(selected_months)]
 
-# 5. Menyalin kolom Service ID / Service Number
-processed_data['Service No.'] = data['Service No.']
+            # 3. Filter Status Dinamis (Sidebar)
+            if 'Status' in df.columns:
+                with st.sidebar:
+                    st.markdown("---")
+                    st.subheader("📍 Status Filter")
+                    all_status = df['Status'].unique().tolist()
+                    selected_status = st.multiselect("Pilih Status:", options=all_status, default=all_status)
+                df = df[df['Status'].isin(selected_status)]
 
-# 6. Menyalin kolom CRM Order Type
-processed_data['CRM Order Type'] = data['CRM Order Type']
+            # 4. Pembersihan Data (Logic asli Anda)
+            df['SC Order No/Track ID/CSRM No'] = df[col_id].apply(lambda x: str(x).split('_')[0])
+            df['Date Created'] = df['Date Created DT'].dt.strftime('%d/%m/%Y %H:%M:%S')
+            df['Booking Date'] = df['Booking Date'].astype(str).str.split('.').str[0]
+            
+            # 5. Sinkronisasi & Cek Duplikat ke Google Sheets
+            try:
+                sheet = client.open("Salinan dari NEW GDOC WSA FULFILLMENT").sheet1
+                google_df = pd.DataFrame(sheet.get_all_records())
+                
+                if not google_df.empty and col_id in google_df.columns:
+                    existing = google_df[col_id].astype(str).unique()
+                    df_final = df[~df[col_id].astype(str).isin(existing)].copy()
+                else:
+                    df_final = df.copy()
 
-# 7. Menyalin kolom Status
-processed_data['Status'] = data['Status']
+                # --- DISPLAY ---
+                c1, c2, c3 = st.columns(3)
+                with c1: st.markdown(f'<div class="metric-card">📂 Total Filtered<br><h2>{len(df)}</h2></div>', unsafe_allow_html=True)
+                with c2: st.markdown(f'<div class="metric-card">✨ Data Unik Baru<br><h2>{len(df_final)}</h2></div>', unsafe_allow_html=True)
+                with c3: st.markdown(f'<div class="metric-card">🔗 GDoc Status<br><h2 style="color:#00ff88">Connected</h2></div>', unsafe_allow_html=True)
 
-# 9. Menyalin kolom Service Address
-processed_data['Address'] = data['Address']
+                st.subheader("📋 Preview Data Validasi")
+                cols_to_show = ['Workzone', 'Date Created', 'SC Order No/Track ID/CSRM No', 'Service No.', 'Workorder', 'Customer Name', 'Address', 'Contact Number', 'CRM Order Type','Booking Date']
+                st.dataframe(df_final[cols_to_show].sort_values('Workzone'), use_container_width=True)
 
-# 10. Menyalin kolom Customer Name
-processed_data['Customer Name'] = data['Customer Name']
+                # --- DOWNLOAD ---
+                output = io.BytesIO()
+                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                    df_final[cols_to_show].to_excel(writer, index=False)
+                
+                st.download_button("📥 DOWNLOAD DATA UNIK", output.getvalue(), "WSA_Report_Cleaned.xlsx")
 
-# 8. Menyalin kolom Workzone
-processed_data['Workzone'] = data['Workzone']
-
-# 11. Menyalin kolom Telephon Number
-processed_data['Booking Date'] = data['Booking Date'].astype(str).str.split('.').str[0]
-
-# 11. Menyalin kolom Telephon Number
-processed_data['Contact Number'] = data['Contact Number']
-
-# Mengisi nomor kontak yang kosong berdasarkan Customer Name dari data yang sama
-contact_map = processed_data.loc[processed_data['Contact Number'].notna() & (processed_data['Contact Number'] != ''), ['Customer Name', 'Contact Number']].drop_duplicates()
-contact_dict = dict(zip(contact_map['Customer Name'], contact_map['Contact Number']))
-
-def fill_contact_number(row):
-    if pd.isna(row['Contact Number']) or row['Contact Number'] == '':
-        return contact_dict.get(row['Customer Name'], row['Contact Number'])
-    else:
-        return row['Contact Number']
-    
-processed_data['Contact Number'] = processed_data.apply(fill_contact_number, axis=1)
-
-# 12. Menyalin kolom CRM Order Type tapi hanya yang CREATE dan MIGRATE
-processed_data = processed_data[processed_data['CRM Order Type'].isin(['CREATE', 'MIGRATE'])]
-
-# 13. Memfilter hanya yang tanggal 'Date Created' pada bulan Oktober
-processed_data = processed_data[(processed_data['Date Created'].dt.month == 1)|(processed_data['Date Created'].dt.month == 2)]
-
-# 14. Mengatur format tanggal menjadi dd/mm/yyyy hh:mm:ss
-processed_data['Date Created'] = processed_data['Date Created'].dt.strftime('%d/%m/%Y %H:%M:%S')
-
-# 14. Mengurutkan DataFrame berdasarkan kolom Workzone dalam urutan abjad
-processed_data = processed_data.sort_values(by='Workzone', ascending=True)
-
-# 15. Mengatur urutan kolom sesuai permintaan
-final_output = processed_data[['Workzone', 'Date Created', 'SC Order No/Track ID/CSRM No',
-                                 'Service No.', 'Workorder', 
-                                 'Customer Name', 'Address', 
-                                 'Contact Number', 'CRM Order Type','Booking Date']]
-
-# Step 2: Baca data dari Google Sheets
-spreadsheet_name = "Salinan dari NEW GDOC WSA FULFILLMENT"  # Nama spreadsheet
-spreadsheet = client.open(spreadsheet_name)  # Membuka spreadsheet berdasarkan nama
-worksheet = spreadsheet.sheet1  # Mengakses sheet pertama
-
-# Mengambil semua data dari Google Sheets
-google_data = worksheet.get_all_records()
-google_df = pd.DataFrame(google_data)
-
-print("Kolom yang ada di DataFrame Google Sheets:")
-print(google_df.columns)
-
-# Step 3: Bandingkan dan hapus duplikat
-# Mengambil nilai SC Order dari Google Sheets
-if 'SC Order No/Track ID/CSRM No' in google_df.columns:
-    google_sc_order = google_df['SC Order No/Track ID/CSRM No']  # Ganti dengan kolom yang tepat jika berbeda
-
-    # Menghitung data unik dari processed_data yang tidak ada di google_sc_order
-    unique_data = processed_data[~processed_data['SC Order No/Track ID/CSRM No'].isin(google_sc_order)]
-
-    # Step 4: Menyimpan data yang tidak terduplikasi di file Excel bar  u
-    unique_data.to_excel(output_file, index=False)
-
-    print(f"Data yang tidak terduplikasi telah disimpan ke {output_file}.")
-else:
-    print("Kolom 'N. SC' tidak ditemukan di DataFrame Google Sheets.")
+            except Exception as e:
+                st.error(f"Gagal akses Google Sheets: {e}")
+        else:
+            st.error(f"Kolom '{col_id}' tidak ditemukan!")
