@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "project-pengolahan-data",
+  "private_key_id": "62bff7107e8e4ada5c278244687705656daf05d1",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvgIBADANBgkqhkiG9w0BAQEFAASCBKgwggSkAgEAAoIBAQCnfMutPWIxezIT\nLpWkPIt37xByPLgIsdilIi+ombjWQHzLnd7azvS/6U8BeLrz8HrXnfOr6K1SGihG\nZfI0dJDDQ0Le4frdgH7s0G3fVgxRGfaHwifAbTlGPV/sqAsJ/6j3N2TbCyPOi63S\n5ggtjy6bcA8HN0IAOa7rji0+1EwLHZSm0LSbuoYEAg1M05s6Q3uKJzfNR6hZxOqS\n5ODeOoVloqkWDSASIgNkaWC6SoMV43HOGijG5U/wEl9Z5t72o7+55+bzg7Vtqr+a\nQXr94eTm329mXoZk9zk3qLdynnB/CttdNut80RxSu7/wfgzvinRX3kN9Tj0Gxrv8\nSockCjwVAgMBAAECggEAAmZ11/qHn1EcqDNRG0fWCwn20/kUY7Hox06ntpejxnsP\ntS6CzkmMLscXksKgK0H7zX5xMSCy5/i0yw169k8VVzcHjLPAXJxGAi7NsRdFzFCK\n7+pTl4MsZvOwndU3ea7Oq3xOJBvf9eQ0J+mUBGy6eXYwDb84Lh8L533juBrJKP+Y\nyfhKs4nZay09yyQDZiAyCIKub0yX17TO45RWI2D3VlZOoEjh0ZdNFkejD5G8DmQj\nFxLmEDdqgAzmic2zdK/aDNtLgUV1wWycj1k0vjJtiGGneNQ5CJk9H7SlqfI1PD2G\nyETnl/13zIbfVIn/YXPvso8/ufrmiELTyBTvMPTkAQKBgQDUIhg4eJVeGx3Qf3wo\n6U427fFgYiZyA+3Byep82t5k8IOXS77fDc6ovH3P3cRU+37plfIrJB1j+vks5W2A\nEnjHFt264dHDDxngbw9qgD0eKDPyFyZEH0FEEckMPjpx/vjHjy4drcLX+rIzLE9a\nJlV10iYLCRjDP7aWigx55ZpuNQKBgQDKHz9Hoa/MQ4hjgyVBUwf6RzDlRTwMmsmW\nJP3Y+EPWElQ7K0Hnz6+8Ig2nUdcugUNrbshjtcjs+Z94Jo/sagauhavfYF56Tjh0\nHPn/pR6+kKnI8+/KxU84DWeU6Po9uVI8F5rwrBha6g/pmfQQC+adrbF95cFUSDgK\nDN5N7YPSYQKBgQC7jx2tKGigmQcmZuGHZqjCBmXJm150pqacFgQeuoGx67ndlpo/\nq3ySUn5GwMSrguX2b557qGXYFXokyQGlIC/rj3siljEZ7wspFekieBoRxOgQ34j0\n6FGTdso06fxQ+GhMQXs7wHuq7LyMZFwQ0B31m4YJcdSUJYwx1AMt7+U4FQKBgHJU\nkIflVrq1bJ3VnipAXF/fCzJ1Ik2C9QqALDMh48VgotLBWktU+HPz00NVEOIWbluD\n08hLGLerT+A39+tj4hmwNRNqwKZwPpC3n1ZTQXvL+q5YBcjuKSxssK3Tx1FI1dJ2\nC8edoT0z7wJVem/lO3LvwFmVr/EL1N8iflEYTBuhAoGBAMMTkDS5zZVOBmfqwygN\nYnnmVGgzGGJnUKzg6KbijoVc+ubRSaCffFJ6XZbtGa3Ck67MJIT6Sbnx744jVxwO\nk5l7EPfRBulB0peg3gn1DGTRkvJPGx7xRI56NnOj+fEuSQOYV5LQtsEsy468lD+i\nUt3MFGSv6/7n3vPi57zF9SAJ\n-----END PRIVATE KEY-----\n",
+  "client_email": "bayuproject@project-pengolahan-data.iam.gserviceaccount.com",
+  "client_id": "102835442354867938952",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/bayuproject%40project-pengolahan-data.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}
