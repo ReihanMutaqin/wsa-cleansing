@@ -5,43 +5,45 @@ from oauth2client.service_account import ServiceAccountCredentials
 import io
 import json
 
-# Konfigurasi Halaman (Harus di paling atas)
+# 1. Konfigurasi Halaman & Tema
 st.set_page_config(
-    page_title="WSA Data Analytics",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    page_title="WSA Pro Dashboard",
+    page_icon="⚡",
+    layout="wide"
 )
 
-# --- CUSTOM CSS UNTUK TAMPILAN PROFESIONAL ---
+# 2. Custom CSS untuk Tampilan Mewah
 st.markdown("""
     <style>
+    /* Mengubah font dan background */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap');
+    html, body, [class*="css"] {
+        font-family: 'Inter', sans-serif;
+    }
     .main {
-        background-color: #f8f9fa;
+        background-color: #f0f2f6;
     }
-    .stButton>button {
+    /* Style Card Statistik */
+    .metric-container {
+        background-color: white;
+        padding: 20px;
+        border-radius: 15px;
+        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        text-align: center;
+        border-bottom: 5px solid #ff4b4b;
+    }
+    /* Tombol Download */
+    .stDownloadButton button {
+        background-color: #28a745 !important;
+        color: white !important;
+        border-radius: 10px !important;
         width: 100%;
-        border-radius: 5px;
-        height: 3em;
-        background-color: #007bff;
-        color: white;
-        border: none;
-    }
-    .stButton>button:hover {
-        background-color: #0056b3;
-        color: white;
-    }
-    div[data-testid="stMetricValue"] {
-        font-size: 28px;
-        color: #007bff;
-    }
-    .reportview-container .main .block-container {
-        padding-top: 2rem;
+        font-weight: bold;
     }
     </style>
     """, unsafe_allow_html=True)
 
-# --- FUNGSI CORE ---
+# 3. Fungsi Koneksi
 @st.cache_resource
 def get_gspread_client():
     json_file = "project-pengolahan-data-561c0b891db8.json"
@@ -53,83 +55,100 @@ def get_gspread_client():
         creds = ServiceAccountCredentials.from_json_keyfile_dict(info, ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"])
         return gspread.authorize(creds)
     except Exception as e:
-        st.error(f"Gagal koneksi: {e}")
+        st.error(f"Koneksi Gagal: {e}")
         return None
 
 # --- SIDEBAR ---
 with st.sidebar:
-    st.image("https://www.gstatic.com/images/branding/product/2x/sheets_2020q4_48dp.png", width=50)
-    st.title("Control Panel")
-    st.markdown("---")
+    st.header("⚙️ Filter & Kontrol")
+    
+    # Filter Bulan
     selected_months = st.multiselect(
-        "📅 Pilih Periode Bulan:",
+        "📅 Pilih Bulan:",
         options=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
         default=[1, 2],
         format_func=lambda x: ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"][x-1]
     )
+    
+    # Tempat penampung filter status (akan diisi setelah file diupload)
+    status_filter = st.multiselect("📌 Filter Status:", options=[], help="Upload file dulu untuk memunculkan pilihan status")
+    
     st.markdown("---")
-    st.info("Aplikasi ini otomatis memfilter duplikat berdasarkan data di Google Sheets.")
+    if st.button("🔄 Reset Aplikasi"):
+        st.cache_resource.clear()
+        st.rerun()
 
 # --- MAIN CONTENT ---
-st.title("🚀 WSA Data Cleansing Dashboard")
-st.markdown("Sistem otomasi validasi data Order (AO/PDA/WSA) dan sinkronisasi Google Sheets.")
+st.title("🚀 WSA FULFILLMENT DASHBOARD")
+st.caption("Automated Cleansing & Validation System v2.0")
 
 client = get_gspread_client()
 
 if client:
-    uploaded_file = st.file_uploader("Seret dan lepas file Report Excel di sini", type=["xlsx"])
+    uploaded_file = st.file_uploader("Upload file Report Excel (XLSX)", type=["xlsx"])
 
     if uploaded_file:
-        with st.spinner('Menganalisis data...'):
-            data = pd.read_excel(uploaded_file)
+        with st.spinner('Sedang memproses database...'):
+            df = pd.read_excel(uploaded_file)
             
-            if 'SC Order No/Track ID/CSRM No' in data.columns:
-                # Proses Data
-                data_filtered = data[data['SC Order No/Track ID/CSRM No'].astype(str).str.contains('AO|PDA|WSA', na=False)].copy()
-                data_filtered['Date Created DT'] = pd.to_datetime(data_filtered['Date Created'], errors='coerce')
+            if 'SC Order No/Track ID/CSRM No' in df.columns:
+                # A. Filter Dasar (AO/PDA/WSA)
+                df_clean = df[df['SC Order No/Track ID/CSRM No'].astype(str).str.contains('AO|PDA|WSA', na=False)].copy()
                 
+                # B. Konversi Tanggal & Filter Bulan
+                df_clean['Date Created DT'] = pd.to_datetime(df_clean['Date Created'], errors='coerce')
                 if selected_months:
-                    data_filtered = data_filtered[data_filtered['Date Created DT'].dt.month.isin(selected_months)]
+                    df_clean = df_clean[df_clean['Date Created DT'].dt.month.isin(selected_months)]
                 
-                # Cek Duplikat ke Google Sheets
+                # C. Fitur Baru: Filter Status
+                if 'Status' in df_clean.columns:
+                    all_statuses = df_clean['Status'].unique().tolist()
+                    # Menampilkan pilihan status di sidebar secara dinamis
+                    st.sidebar.markdown("### Status Terdeteksi:")
+                    status_choice = st.sidebar.multiselect("Pilih Status:", options=all_statuses, default=all_statuses)
+                    df_clean = df_clean[df_clean['Status'].isin(status_choice)]
+
+                # D. Validasi Duplikat ke Google Sheets
                 spreadsheet_name = "Salinan dari NEW GDOC WSA FULFILLMENT"
                 sheet = client.open(spreadsheet_name).sheet1
-                google_data = pd.DataFrame(sheet.get_all_records())
+                google_df = pd.DataFrame(sheet.get_all_records())
                 
-                if not google_data.empty and 'SC Order No/Track ID/CSRM No' in google_data.columns:
-                    existing_orders = google_data['SC Order No/Track ID/CSRM No'].astype(str).unique()
-                    unique_data = data_filtered[~data_filtered['SC Order No/Track ID/CSRM No'].astype(str).isin(existing_orders)].copy()
+                if not google_df.empty and 'SC Order No/Track ID/CSRM No' in google_df.columns:
+                    existing = google_df['SC Order No/Track ID/CSRM No'].astype(str).unique()
+                    unique_df = df_clean[~df_clean['SC Order No/Track ID/CSRM No'].astype(str).isin(existing)].copy()
                 else:
-                    unique_data = data_filtered.copy()
+                    unique_df = df_clean.copy()
 
-                # --- STATISTIK (METRIC CARDS) ---
-                st.markdown("### 📊 Ringkasan Analisis")
-                col1, col2, col3 = st.columns(3)
-                col1.metric("Total Data Upload", f"{len(data)} baris")
-                col2.metric("Data Filtered (WSA/AO/PDA)", f"{len(data_filtered)} baris")
-                col3.metric("Data Baru (Unik)", f"{len(unique_data)} baris", delta=f"{len(unique_data)} New")
+                # --- UI: METRIC CARDS ---
+                m1, m2, m3 = st.columns(3)
+                with m1:
+                    st.markdown(f'<div class="metric-container"><h5>Total Row</h5><h2>{len(df)}</h2></div>', unsafe_allow_html=True)
+                with m2:
+                    st.markdown(f'<div class="metric-container"><h5>WSA Filtered</h5><h2>{len(df_clean)}</h2></div>', unsafe_allow_html=True)
+                with m3:
+                    st.markdown(f'<div class="metric-container"><h5>Ready to Export</h5><h2>{len(unique_df)}</h2></div>', unsafe_allow_html=True)
 
+                st.markdown("### 📋 Preview Data Unik")
+                
+                # Bersihkan tampilan kolom Date
+                unique_df['Date Created'] = unique_df['Date Created'].astype(str).str.split('.').str[0]
+                final_out = unique_df.drop(columns=['Date Created DT'])
+                
+                st.dataframe(final_out, use_container_width=True, height=400)
+
+                # --- DOWNLOAD ---
                 st.markdown("---")
-
-                # --- DATA PREVIEW ---
-                st.subheader("🔍 Preview Data Baru")
-                unique_data['Date Created'] = unique_data['Date Created'].astype(str).str.split('.').str[0]
-                final_display = unique_data.drop(columns=['Date Created DT'])
-                st.dataframe(final_display, use_container_width=True)
-
-                # --- DOWNLOAD SECTION ---
-                st.markdown("### 💾 Export Hasil")
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-                    final_display.to_excel(writer, index=False)
+                    final_out.to_excel(writer, index=False)
                 
                 st.download_button(
-                    label="📥 Download Excel Hasil Cleansing",
+                    label="📥 DOWNLOAD HASIL CLEANSING (EXCEL)",
                     data=output.getvalue(),
-                    file_name="wsa_clean_report.xlsx",
+                    file_name="wsa_report_pro.xlsx",
                     mime="application/vnd.ms-excel"
                 )
             else:
-                st.error("Format kolom tidak sesuai. Pastikan ada kolom 'SC Order No/Track ID/CSRM No'.")
+                st.error("Kolom 'SC Order No/Track ID/CSRM No' tidak ditemukan!")
 else:
-    st.warning("Menunggu koneksi ke Database Google...")
+    st.warning("Menghubungkan ke server Google...")
