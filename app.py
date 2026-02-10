@@ -38,10 +38,7 @@ st.markdown("""
 @st.cache_resource
 def get_gspread_client():
     try:
-        # Mengambil data dari Secrets Streamlit Cloud
         info = dict(st.secrets["gcp_service_account"])
-        
-        # Perbaikan format private key (mengembalikan karakter baris baru)
         if 'private_key' in info:
             info['private_key'] = info['private_key'].replace('\\n', '\n')
         
@@ -69,21 +66,24 @@ with st.sidebar:
 # --- MAIN LOGIC ---
 st.title(f"🚀 Dashboard {menu}")
 
-# Tentukan Nama Sheet Tujuan
-if menu == "MODOROSO":
-    target_sheet_name = "MODOROSO_JAKTIMSEL"
-else:
-    target_sheet_name = "Sheet1"
-
 client = get_gspread_client()
+ws = None
+target_sheet_name = "Sheet Target"
 
 # --- CEK KONEKSI (VISUAL) ---
 if client:
     try:
-        # Coba buka Spreadsheet dan Sheet spesifik
         sh = client.open("Salinan dari NEW GDOC WSA FULFILLMENT")
-        ws = sh.worksheet(target_sheet_name)
         
+        # PERBAIKAN LOGIKA SHEET DI SINI
+        if menu == "MODOROSO":
+            target_sheet_name = "MODOROSO_JAKTIMSEL"
+            ws = sh.worksheet(target_sheet_name) # Cari sheet spesifik
+        else:
+            # WSA dan WAPPR menggunakan sheet pertama (index 0) apapun namanya
+            ws = sh.get_worksheet(0) 
+            target_sheet_name = ws.title # Ambil nama sheetnya untuk ditampilkan
+
         st.markdown(f"""
         <div class="status-box success-box">
             ✅ SISTEM ONLINE | Terhubung ke: {target_sheet_name}
@@ -94,8 +94,7 @@ if client:
     except Exception as e:
         st.markdown(f"""
         <div class="status-box error-box">
-            ❌ GAGAL AKSES SHEET | Cek nama sheet: {target_sheet_name}<br>
-            <small>Error: {e}</small>
+            ❌ GAGAL AKSES SHEET | {e}
         </div>
         """, unsafe_allow_html=True)
         connection_status = False
@@ -104,7 +103,7 @@ else:
     connection_status = False
 
 # --- UPLOAD FILE ---
-if connection_status:
+if connection_status and ws:
     uploaded_file = st.file_uploader(f"Upload Data {menu} (XLSX/CSV)", type=["xlsx", "xls", "csv"])
 
     if uploaded_file:
@@ -116,7 +115,7 @@ if connection_status:
         try:
             with st.spinner(f"Memproses data {menu}..."):
                 
-                # A. LOGIKA FILTERING
+                # --- A. LOGIKA FILTERING ---
                 if menu == "WSA":
                     df = df_raw[df_raw['SC Order No/Track ID/CSRM No'].astype(str).str.contains('AO|PDA|WSA', na=False)].copy()
                     if 'CRM Order Type' in df.columns:
@@ -133,20 +132,36 @@ if connection_status:
                         df = df[df['Status'] == 'WAPPR']
                     check_col = 'Workorder'
 
-                # B. CLEANING DATA
+                # --- B. CLEANING DATA ---
+                # 1. Bersihkan Date Created
                 if 'Date Created' in df.columns:
                     df['Date Created DT'] = pd.to_datetime(df['Date Created'].astype(str).str.replace('.0', '', regex=False), errors='coerce')
                     if selected_months:
                         df = df[df['Date Created DT'].dt.month.isin(selected_months)]
                     df['Date Created Display'] = df['Date Created DT'].dt.strftime('%d/%m/%Y %H:%M:%S')
                 
+                # 2. Bersihkan Booking Date
                 if 'Booking Date' in df.columns:
                     df['Booking Date'] = df['Booking Date'].astype(str).str.split('.').str[0]
                 
+                # 3. Bersihkan SC Order (Split underscore)
                 if 'SC Order No/Track ID/CSRM No' in df.columns:
                      df['SC Order No/Track ID/CSRM No'] = df['SC Order No/Track ID/CSRM No'].apply(lambda x: str(x).split('_')[0])
 
-                # C. CEK DUPLIKAT (Pakai ws yang sudah dibuka di atas)
+                # 4. Fitur Tambahan: Isi Contact Number Kosong (Khusus WSA)
+                if menu == "WSA" and 'Contact Number' in df.columns and 'Customer Name' in df.columns:
+                    # Buat mapping nama -> kontak
+                    contact_map = df.loc[df['Contact Number'].notna(), ['Customer Name', 'Contact Number']].drop_duplicates('Customer Name')
+                    contact_dict = dict(zip(contact_map['Customer Name'], contact_map['Contact Number']))
+                    
+                    def fill_contact(row):
+                        if pd.isna(row['Contact Number']) or str(row['Contact Number']).strip() == '':
+                            return contact_dict.get(row['Customer Name'], row['Contact Number'])
+                        return row['Contact Number']
+                    
+                    df['Contact Number'] = df.apply(fill_contact, axis=1)
+
+                # --- C. CEK DUPLIKAT ---
                 google_data = ws.get_all_records()
                 google_df = pd.DataFrame(google_data)
 
@@ -156,11 +171,11 @@ if connection_status:
                 else:
                     df_final = df.copy()
 
-                # D. DISPLAY HASIL
+                # --- D. DISPLAY HASIL ---
                 c1, c2, c3 = st.columns(3)
                 c1.markdown(f'<div class="metric-card">📂 Data Filtered<br><h2>{len(df)}</h2></div>', unsafe_allow_html=True)
                 c2.markdown(f'<div class="metric-card">✨ Data Unik<br><h2>{len(df_final)}</h2></div>', unsafe_allow_html=True)
-                c3.markdown(f'<div class="metric-card">🔗 Sheet Target<br><h2>{target_sheet_name}</h2></div>', unsafe_allow_html=True)
+                c3.markdown(f'<div class="metric-card">🔗 Sheet<br><h2>{target_sheet_name}</h2></div>', unsafe_allow_html=True)
 
                 st.subheader("📋 Preview Data")
                 cols_target = ['Workzone', 'Date Created Display', 'SC Order No/Track ID/CSRM No', 
