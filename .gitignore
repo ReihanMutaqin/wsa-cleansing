@@ -1,0 +1,6 @@
+# Abaikan file kunci rahasia
+*.json
+
+# Abaikan file cache Python
+__pycache__/
+*.pyc
