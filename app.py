@@ -6,7 +6,7 @@ import io
 import json
 from datetime import datetime
 
-# --- 1. CONFIG PAGE ---
+# --- CONFIG PAGE ---
 st.set_page_config(page_title="WSA Multi-Tool", layout="wide")
 
 st.markdown("""
@@ -20,15 +20,9 @@ st.markdown("""
         border-left: 5px solid #00d4ff;
         box-shadow: 0 4px 6px rgba(0,0,0,0.3);
     }
-    .status-box {
-        padding: 10px;
-        border-radius: 5px;
-        margin-bottom: 20px;
-        font-weight: bold;
-    }
+    .status-box { padding: 10px; border-radius: 5px; margin-bottom: 20px; font-weight: bold; }
     .success-box { background-color: #1c4f2e; color: #4caf50; border: 1px solid #4caf50; }
     .error-box { background-color: #4f1c1c; color: #ff4b4b; border: 1px solid #ff4b4b; }
-    
     h1, h2, h3 { color: #00d4ff !important; }
     .stDownloadButton button {
         background: linear-gradient(45deg, #00d4ff, #008fb3) !important;
@@ -40,12 +34,14 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- 2. KONEKSI GOOGLE SHEETS ---
+# --- KONEKSI GOOGLE SHEETS ---
 @st.cache_resource
 def get_gspread_client():
     try:
-        # Baca Secrets
+        # Mengambil data dari Secrets Streamlit Cloud
         info = dict(st.secrets["gcp_service_account"])
+        
+        # Perbaikan format private key (mengembalikan karakter baris baru)
         if 'private_key' in info:
             info['private_key'] = info['private_key'].replace('\\n', '\n')
         
@@ -55,7 +51,7 @@ def get_gspread_client():
     except Exception as e:
         return None
 
-# --- 3. SIDEBAR ---
+# --- SIDEBAR MENU ---
 with st.sidebar:
     st.title("⚙️ Control Panel")
     menu = st.radio("Pilih Operasi:", ["WSA", "MODOROSO", "WAPPR"])
@@ -70,10 +66,10 @@ with st.sidebar:
         format_func=lambda x: ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"][x-1]
     )
 
-# --- 4. MAIN LOGIC ---
+# --- MAIN LOGIC ---
 st.title(f"🚀 Dashboard {menu}")
 
-# Tentukan Target Sheet berdasarkan Menu
+# Tentukan Nama Sheet Tujuan
 if menu == "MODOROSO":
     target_sheet_name = "MODOROSO_JAKTIMSEL"
 else:
@@ -81,37 +77,33 @@ else:
 
 client = get_gspread_client()
 
-# --- FITUR BARU: CEK KONEKSI DI AWAL ---
+# --- CEK KONEKSI (VISUAL) ---
 if client:
     try:
-        # Coba buka Spreadsheet dan Sheet spesifik SAAT INI JUGA
+        # Coba buka Spreadsheet dan Sheet spesifik
         sh = client.open("Salinan dari NEW GDOC WSA FULFILLMENT")
         ws = sh.worksheet(target_sheet_name)
         
-        # Jika berhasil baris di atas, tampilkan Status Hijau
         st.markdown(f"""
         <div class="status-box success-box">
-            ✅ SISTEM ONLINE | Terhubung ke GDoc: {target_sheet_name}
+            ✅ SISTEM ONLINE | Terhubung ke: {target_sheet_name}
         </div>
         """, unsafe_allow_html=True)
-        
         connection_status = True
 
     except Exception as e:
-        # Jika gagal (salah nama sheet atau permission error)
         st.markdown(f"""
         <div class="status-box error-box">
-            ❌ SISTEM OFFLINE | Gagal akses sheet: {target_sheet_name}<br>
+            ❌ GAGAL AKSES SHEET | Cek nama sheet: {target_sheet_name}<br>
             <small>Error: {e}</small>
         </div>
         """, unsafe_allow_html=True)
         connection_status = False
 else:
-    st.error("Kunci API (Secrets) bermasalah.")
+    st.error("Gagal membaca Secrets. Pastikan Anda sudah update Secrets di Streamlit Cloud.")
     connection_status = False
 
-
-# --- 5. UPLOAD FILE (Hanya muncul jika Koneksi Aman) ---
+# --- UPLOAD FILE ---
 if connection_status:
     uploaded_file = st.file_uploader(f"Upload Data {menu} (XLSX/CSV)", type=["xlsx", "xls", "csv"])
 
@@ -122,9 +114,9 @@ if connection_status:
             df_raw = pd.read_excel(uploaded_file)
             
         try:
-            with st.spinner(f"Memproses logika {menu}..."):
+            with st.spinner(f"Memproses data {menu}..."):
                 
-                # --- A. LOGIKA FILTERING ---
+                # A. LOGIKA FILTERING
                 if menu == "WSA":
                     df = df_raw[df_raw['SC Order No/Track ID/CSRM No'].astype(str).str.contains('AO|PDA|WSA', na=False)].copy()
                     if 'CRM Order Type' in df.columns:
@@ -141,7 +133,7 @@ if connection_status:
                         df = df[df['Status'] == 'WAPPR']
                     check_col = 'Workorder'
 
-                # --- B. CLEANING ---
+                # B. CLEANING DATA
                 if 'Date Created' in df.columns:
                     df['Date Created DT'] = pd.to_datetime(df['Date Created'].astype(str).str.replace('.0', '', regex=False), errors='coerce')
                     if selected_months:
@@ -154,8 +146,7 @@ if connection_status:
                 if 'SC Order No/Track ID/CSRM No' in df.columns:
                      df['SC Order No/Track ID/CSRM No'] = df['SC Order No/Track ID/CSRM No'].apply(lambda x: str(x).split('_')[0])
 
-                # --- C. CEK DUPLIKAT (Menggunakan koneksi yang sudah dites di atas) ---
-                # Kita pakai variabel 'ws' yang sudah dibuka di awal tadi
+                # C. CEK DUPLIKAT (Pakai ws yang sudah dibuka di atas)
                 google_data = ws.get_all_records()
                 google_df = pd.DataFrame(google_data)
 
@@ -165,11 +156,11 @@ if connection_status:
                 else:
                     df_final = df.copy()
 
-                # --- D. METRICS & DISPLAY ---
+                # D. DISPLAY HASIL
                 c1, c2, c3 = st.columns(3)
                 c1.markdown(f'<div class="metric-card">📂 Data Filtered<br><h2>{len(df)}</h2></div>', unsafe_allow_html=True)
                 c2.markdown(f'<div class="metric-card">✨ Data Unik<br><h2>{len(df_final)}</h2></div>', unsafe_allow_html=True)
-                c3.markdown(f'<div class="metric-card">🔗 Sheet<br><h2>{target_sheet_name}</h2></div>', unsafe_allow_html=True)
+                c3.markdown(f'<div class="metric-card">🔗 Sheet Target<br><h2>{target_sheet_name}</h2></div>', unsafe_allow_html=True)
 
                 st.subheader("📋 Preview Data")
                 cols_target = ['Workzone', 'Date Created Display', 'SC Order No/Track ID/CSRM No', 
@@ -178,7 +169,6 @@ if connection_status:
                 if 'Booking Date' in df_final.columns: cols_target.append('Booking Date')
                 
                 cols_final = [c for c in cols_target if c in df_final.columns]
-                
                 if 'Workzone' in df_final.columns: df_final = df_final.sort_values('Workzone')
 
                 st.dataframe(df_final[cols_final], use_container_width=True)
