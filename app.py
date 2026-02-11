@@ -166,7 +166,7 @@ if connection_status and ws:
                     
                     # 5. Kolom Output (Ada Booking Date)
                     output_cols_list = ['Date Created', 'Workorder','SC Order No/Track ID/CSRM No', 
-                                        'Service No.', 'CRM Order Typ', 'Status', 'Address', 
+                                        'Service No.', 'CRM Order Type', 'Status', 'Address', 
                                         'Customer Name', 'Workzone', 'Booking Date','Contact Number']
                 
                 # === MENU 2: MODOROSO ===
@@ -179,7 +179,7 @@ if connection_status and ws:
                     
                     # 3. Kolom Output (Logic Asli TIDAK ADA Booking Date)
                     output_cols_list = ['Date Created', 'Workorder','SC Order No/Track ID/CSRM No', 
-                                        'Service No.', 'CRM Order Typ', 'Status', 'Address', 
+                                        'Service No.', 'CRM Order Type', 'Status', 'Address', 
                                         'Customer Name', 'Workzone', 'Booking Date','Contact Number']
 
                 # === MENU 3: WAPPR ===
@@ -196,7 +196,7 @@ if connection_status and ws:
                     
                     # 4. Kolom Output (Ada Booking Date)
                     output_cols_list = ['Date Created', 'Workorder','SC Order No/Track ID/CSRM No', 
-                                        'Service No.', 'CRM Order Typ', 'Status', 'Address', 
+                                        'Service No.', 'CRM Order Type', 'Status', 'Address', 
                                         'Customer Name', 'Workzone', 'Booking Date','Contact Number']
 
                 # --- STEP 3: RAPIKAN SC ORDER (Split Underscore) ---
@@ -246,4 +246,5 @@ if connection_status and ws:
 
         except Exception as e:
             st.error(f"Terjadi kesalahan: {e}")
+
 
