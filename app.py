@@ -110,39 +110,43 @@ if connection_status and ws:
                 
                 # --- A. LOGIKA FILTERING ---
                 
-                # === 1. WSA (VALIDATION) ===
+                # === 1. WSA (VALIDATION) - LOGIKA AWAL ===
                 if menu == "WSA (Validation)":
-                    df = df[df[col_sc].astype(str).str.contains('AO|PDA|WSA', na=False, case=False)]
-                    if 'CRM Order Type' in df.columns:
-                        df = df[df['CRM Order Type'].astype(str).str.strip().str.upper().isin(['CREATE', 'MIGRATE'])]
+                    # Filter 1: SC Order mengandung AO/PDA/WSA (Tanpa case=False, sesuai asli)
+                    df = df[df[col_sc].astype(str).str.contains('AO|PDA|WSA', na=False)]
                     
+                    # Filter 2: CRM Type harus CREATE atau MIGRATE
+                    if 'CRM Order Type' in df.columns:
+                        df = df[df['CRM Order Type'].isin(['CREATE', 'MIGRATE'])]
+                    
+                    # Fitur: Isi Contact Number Kosong (Sesuai script asli)
                     if 'Contact Number' in df.columns and 'Customer Name' in df.columns:
                         c_map = df.loc[df['Contact Number'].notna() & (df['Contact Number'] != ''), ['Customer Name', 'Contact Number']].drop_duplicates('Customer Name')
                         c_dict = dict(zip(c_map['Customer Name'], c_map['Contact Number']))
                         df['Contact Number'] = df.apply(lambda r: c_dict.get(r['Customer Name'], r['Contact Number']) if pd.isna(r['Contact Number']) or str(r['Contact Number']).strip() == '' else r['Contact Number'], axis=1)
+                    
                     check_col = col_sc
                 
-                # === 2. MODOROSO (LOGIC FIX: HANYA LIHAT SC ORDER) ===
+                # === 2. MODOROSO (LOGIKA BARU: DETEKSI SC ORDER) ===
                 elif menu == "MODOROSO":
-                    # 1. Filter: Cari TEXT "-MO" atau "-DO" di SC Order (CASE INSENSITIVE)
-                    # Ini akan menangkap '-MO', '-DO', '-mo', '-do' dimanapun posisinya
+                    # 1. Filter: Cari "-MO" atau "-DO" di SC Order (Pakai tanda hubung)
                     df = df[df[col_sc].astype(str).str.contains(r'-MO|-DO', na=False, case=False)]
                     
-                    # 2. Logic "Cari Pintar": Tentukan MO/DO dari SC Order, TIMPA CRM Type Asli
-                    def detect_mo_do(val):
-                        s = str(val).upper()
-                        if '-MO' in s: return 'MO'
-                        if '-DO' in s: return 'DO'
-                        return 'MO' # Default fallback jika lolos regex tapi aneh
-                    
-                    # Timpa/Isi kolom CRM Order Type dengan hasil deteksi dari SC Order
-                    df['CRM Order Type'] = df[col_sc].apply(detect_mo_do)
+                    # 2. Rename Type: Ubah jadi MO/DO berdasarkan isi SC Order
+                    if 'CRM Order Type' in df.columns:
+                        def detect_mo_do(val):
+                            s = str(val).upper()
+                            if '-MO' in s: return 'MO'
+                            if '-DO' in s: return 'DO'
+                            return 'MO' # Default fallback
+                        
+                        df['CRM Order Type'] = df[col_sc].apply(detect_mo_do)
                         
                     check_col = 'Workorder'
 
                 # === 3. WAPPR ===
                 elif menu == "WAPPR":
-                    df = df[df[col_sc].astype(str).str.contains('AO|PDA', na=False, case=False)]
+                    df = df[df[col_sc].astype(str).str.contains('AO|PDA', na=False)]
                     if 'Status' in df.columns:
                         df = df[df['Status'].astype(str).str.strip().str.upper() == 'WAPPR']
                     check_col = 'Workorder'
@@ -157,7 +161,7 @@ if connection_status and ws:
                     
                     # Alert jika data hilang karena filter bulan
                     if data_before_month > 0 and len(df) == 0:
-                        st.warning(f"⚠️ PERHATIAN: {data_before_month} data ditemukan (MO/DO), tapi hilang karena filter bulan. Cek menu kiri!")
+                        st.warning(f"⚠️ PERHATIAN: {data_before_month} data ditemukan, tapi hilang karena filter bulan. Cek menu kiri!")
 
                     df['Date Created Display'] = df['Date Created DT'].dt.strftime('%d/%m/%Y %H:%M')
                     df['Date Created'] = df['Date Created Display']
@@ -171,15 +175,22 @@ if connection_status and ws:
                 google_df = pd.DataFrame(google_data)
                 
                 if not google_df.empty and check_col in google_df.columns:
+                    # Ambil list ID yang sudah ada (bersihkan .0)
                     existing_ids = google_df[check_col].astype(str).str.replace(r'\.0$', '', regex=True).str.strip().unique()
                     
-                    if col_sc in df.columns:
-                        df[col_sc] = df[col_sc].astype(str).apply(lambda x: x.split('_')[0])
+                    # Bersihkan ID di data Excel sebelum cek (Split SC Order visual nanti saja)
+                    # Tapi untuk cek duplikat WSA, kita perlu format yang sama.
+                    # Di script asli WSA, split SC Order dilakukan DI AWAL.
+                    # Kita lakukan split SC Order dulu jika menu WSA
                     
+                    if col_sc in df.columns:
+                         df[col_sc] = df[col_sc].astype(str).apply(lambda x: x.split('_')[0])
+                    
+                    # Filter data yang TIDAK ada di GDoc
                     df_final = df[~df[check_col].astype(str).str.strip().isin(existing_ids)].copy()
                 else:
                     if col_sc in df.columns:
-                        df[col_sc] = df[col_sc].astype(str).apply(lambda x: x.split('_')[0])
+                         df[col_sc] = df[col_sc].astype(str).apply(lambda x: x.split('_')[0])
                     df_final = df.copy()
 
                 # --- E. OUTPUT DISPLAY ---
