@@ -171,9 +171,9 @@ if connection_status and ws:
                         df['Contact Number'] = df.apply(fill_contact, axis=1)
                     
                     check_col = 'SC Order No/Track ID/CSRM No'
-                    output_cols_list = ['Workzone', 'Date Created', 'SC Order No/Track ID/CSRM No', 
-                                        'Service No.', 'Workorder', 'Customer Name', 'Address', 
-                                        'Contact Number', 'CRM Order Type', 'Booking Date']
+                    output_cols_list = ['Date Created', 'Workorder','SC Order No/Track ID/CSRM No', 
+                                        'Service No.', 'CRM Order Type', 'Status', 'Address', 
+                                        'Customer Name', 'Workzone', 'Booking Date','Contact Number']
                 
                 # === MENU 2: MODOROSO ===
                 elif menu == "MODOROSO":
@@ -256,3 +256,4 @@ if connection_status and ws:
 
         except Exception as e:
             st.error(f"Terjadi kesalahan: {e}")
+
