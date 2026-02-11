@@ -147,6 +147,11 @@ if connection_status and ws:
                 
                 # --- STEP 2: LOGIKA SPESIFIK (FILTER & LOGIC) ---
                 
+                # Urutan Kolom Standar (Sesuai Permintaan)
+                target_order = ['Date Created', 'Workorder', 'SC Order No/Track ID/CSRM No', 
+                                'Service No.', 'CRM Order Type', 'Status', 'Address', 
+                                'Customer Name', 'Workzone', 'Booking Date', 'Contact Number']
+
                 # === MENU 1: WSA (Validation) ===
                 if menu == "WSA (Validation)":
                     # 1. Filter Regex: AO | PDA | WSA
@@ -171,9 +176,7 @@ if connection_status and ws:
                         df['Contact Number'] = df.apply(fill_contact, axis=1)
                     
                     check_col = 'SC Order No/Track ID/CSRM No'
-                    output_cols_list = ['Date Created', 'Workorder','SC Order No/Track ID/CSRM No', 
-                                        'Service No.', 'CRM Order Type', 'Status', 'Address', 
-                                        'Customer Name', 'Workzone', 'Booking Date','Contact Number']
+                    output_cols_list = target_order
                 
                 # === MENU 2: MODOROSO ===
                 elif menu == "MODOROSO":
@@ -181,11 +184,7 @@ if connection_status and ws:
                     df = df[df['SC Order No/Track ID/CSRM No'].astype(str).str.contains('-MO|-DO', na=False)]
                     
                     check_col = 'Workorder'
-                    
-                    # Output standar Modoroso
-                    output_cols_list = ['Date Created', 'Workorder','SC Order No/Track ID/CSRM No', 
-                                        'Service No.', 'CRM Order Type', 'Status', 'Address', 
-                                        'Customer Name', 'Workzone', 'Booking Date','Contact Number']
+                    output_cols_list = target_order
 
                 # === MENU 3: WAPPR ===
                 elif menu == "WAPPR":
@@ -197,10 +196,7 @@ if connection_status and ws:
                         df = df[df['Status'].astype(str).str.strip().str.upper() == 'WAPPR']
                     
                     check_col = 'Workorder'
-                    
-                    output_cols_list = ['Date Created', 'Workorder','SC Order No/Track ID/CSRM No', 
-                                        'Service No.', 'CRM Order Type', 'Status', 'Address', 
-                                        'Customer Name', 'Workzone', 'Booking Date','Contact Number']
+                    output_cols_list = target_order
 
                 # --- STEP 3: RAPIKAN SC ORDER (Split Underscore) ---
                 if 'SC Order No/Track ID/CSRM No' in df.columns:
@@ -256,5 +252,3 @@ if connection_status and ws:
 
         except Exception as e:
             st.error(f"Terjadi kesalahan: {e}")
-
-
