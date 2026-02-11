@@ -3,10 +3,9 @@ import pandas as pd
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import io
-import json
 from datetime import datetime
 
-# --- CONFIG PAGE ---
+# --- 1. CONFIG PAGE ---
 st.set_page_config(page_title="WSA Multi-Tool", layout="wide")
 
 st.markdown("""
@@ -34,10 +33,11 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-# --- KONEKSI GOOGLE SHEETS ---
+# --- 2. KONEKSI GOOGLE SHEETS ---
 @st.cache_resource
 def get_gspread_client():
     try:
+        # Mengambil dari Secrets Streamlit
         info = dict(st.secrets["gcp_service_account"])
         if 'private_key' in info:
             info['private_key'] = info['private_key'].replace('\\n', '\n')
@@ -48,12 +48,14 @@ def get_gspread_client():
     except Exception as e:
         return None
 
-# --- SIDEBAR MENU ---
+# --- 3. SIDEBAR MENU ---
 with st.sidebar:
     st.title("⚙️ Control Panel")
-    menu = st.radio("Pilih Operasi:", ["WSA", "MODOROSO", "WAPPR"])
+    # Menu disesuaikan dengan nama script asli
+    menu = st.radio("Pilih Operasi:", ["WSA (Validation)", "MODOROSO", "WAPPR"])
     st.markdown("---")
     
+    # Filter Bulan (User Control)
     curr_month = datetime.now().month
     prev_month = curr_month - 1 if curr_month > 1 else 12
     selected_months = st.multiselect(
@@ -63,30 +65,30 @@ with st.sidebar:
         format_func=lambda x: ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"][x-1]
     )
 
-# --- MAIN LOGIC ---
+# --- 4. MAIN LOGIC ---
 st.title(f"🚀 Dashboard {menu}")
 
 client = get_gspread_client()
 ws = None
-target_sheet_name = "Sheet Target"
+target_sheet_name = ""
 
-# --- CEK KONEKSI (VISUAL) ---
+# --- A. KONEKSI & PILIH SHEET ---
 if client:
     try:
         sh = client.open("Salinan dari NEW GDOC WSA FULFILLMENT")
         
-        # PERBAIKAN LOGIKA SHEET DI SINI
         if menu == "MODOROSO":
+            # Script asli: worksheet("MODOROSO_JAKTIMSEL")
             target_sheet_name = "MODOROSO_JAKTIMSEL"
-            ws = sh.worksheet(target_sheet_name) # Cari sheet spesifik
+            ws = sh.worksheet(target_sheet_name)
         else:
-            # WSA dan WAPPR menggunakan sheet pertama (index 0) apapun namanya
-            ws = sh.get_worksheet(0) 
-            target_sheet_name = ws.title # Ambil nama sheetnya untuk ditampilkan
+            # Script asli WSA & WAPPR: sheet1 (index 0)
+            ws = sh.get_worksheet(0)
+            target_sheet_name = ws.title
 
         st.markdown(f"""
         <div class="status-box success-box">
-            ✅ SISTEM ONLINE | Terhubung ke: {target_sheet_name}
+            ✅ SISTEM ONLINE | Terhubung ke Sheet: {target_sheet_name}
         </div>
         """, unsafe_allow_html=True)
         connection_status = True
@@ -99,91 +101,135 @@ if client:
         """, unsafe_allow_html=True)
         connection_status = False
 else:
-    st.error("Gagal membaca Secrets. Pastikan Anda sudah update Secrets di Streamlit Cloud.")
+    st.error("Kunci API (Secrets) bermasalah/kosong.")
     connection_status = False
 
-# --- UPLOAD FILE ---
+
+# --- B. PROSES DATA ---
 if connection_status and ws:
     uploaded_file = st.file_uploader(f"Upload Data {menu} (XLSX/CSV)", type=["xlsx", "xls", "csv"])
 
     if uploaded_file:
+        # BACA FILE
         if uploaded_file.name.lower().endswith('.csv'):
             df_raw = pd.read_csv(uploaded_file)
         else:
             df_raw = pd.read_excel(uploaded_file)
             
         try:
-            with st.spinner(f"Memproses data {menu}..."):
+            with st.spinner(f"Sedang memproses logika {menu}..."):
                 
-                # --- A. LOGIKA FILTERING ---
-                if menu == "WSA":
-                    df = df_raw[df_raw['SC Order No/Track ID/CSRM No'].astype(str).str.contains('AO|PDA|WSA', na=False)].copy()
-                    if 'CRM Order Type' in df.columns:
-                        df = df[df['CRM Order Type'].isin(['CREATE', 'MIGRATE'])]
-                    check_col = 'SC Order No/Track ID/CSRM No'
+                df = df_raw.copy()
 
-                elif menu == "MODOROSO":
-                    df = df_raw[df_raw['SC Order No/Track ID/CSRM No'].astype(str).str.contains('-MO|-DO', na=False)].copy()
-                    check_col = 'Workorder' 
-
-                elif menu == "WAPPR":
-                    df = df_raw[df_raw['SC Order No/Track ID/CSRM No'].astype(str).str.contains('AO|PDA', na=False)].copy()
-                    if 'Status' in df.columns:
-                        df = df[df['Status'] == 'WAPPR']
-                    check_col = 'Workorder'
-
-                # --- B. CLEANING DATA ---
-                # 1. Bersihkan Date Created
+                # --- STEP 1: PRE-PROCESSING UMUM (DATE & SC ORDER) ---
                 if 'Date Created' in df.columns:
+                    # Hapus .0 dan ubah ke datetime
                     df['Date Created DT'] = pd.to_datetime(df['Date Created'].astype(str).str.replace('.0', '', regex=False), errors='coerce')
+                    
+                    # Filter Bulan
                     if selected_months:
                         df = df[df['Date Created DT'].dt.month.isin(selected_months)]
+                    
+                    # Format Display sesuai script asli: '%d/%m/%Y %H:%M:%S'
                     df['Date Created Display'] = df['Date Created DT'].dt.strftime('%d/%m/%Y %H:%M:%S')
-                
-                # 2. Bersihkan Booking Date
+
                 if 'Booking Date' in df.columns:
                     df['Booking Date'] = df['Booking Date'].astype(str).str.split('.').str[0]
                 
-                # 3. Bersihkan SC Order (Split underscore)
+                
+                # --- STEP 2: LOGIKA SPESIFIK (FILTER & LOGIC) ---
+                
+                # === MENU 1: WSA (Validation) ===
+                if menu == "WSA (Validation)":
+                    # 1. Filter Regex: AO | PDA | WSA
+                    df = df[df['SC Order No/Track ID/CSRM No'].astype(str).str.contains('AO|PDA|WSA', na=False)]
+                    
+                    # 2. Filter CRM Order Type: CREATE | MIGRATE
+                    if 'CRM Order Type' in df.columns:
+                        df = df[df['CRM Order Type'].isin(['CREATE', 'MIGRATE'])]
+                    
+                    # 3. Fitur Khusus WSA: Isi Contact Number Kosong (Logic Asli)
+                    if 'Contact Number' in df.columns and 'Customer Name' in df.columns:
+                        contact_map = df.loc[df['Contact Number'].notna() & (df['Contact Number'] != ''), 
+                                           ['Customer Name', 'Contact Number']].drop_duplicates('Customer Name')
+                        contact_dict = dict(zip(contact_map['Customer Name'], contact_map['Contact Number']))
+                        
+                        def fill_contact(row):
+                            if pd.isna(row['Contact Number']) or str(row['Contact Number']).strip() == '':
+                                return contact_dict.get(row['Customer Name'], row['Contact Number'])
+                            return row['Contact Number']
+                        
+                        df['Contact Number'] = df.apply(fill_contact, axis=1)
+                    
+                    # 4. Kolom Cek Duplikat: SC Order No (Logic Asli)
+                    check_col = 'SC Order No/Track ID/CSRM No'
+                    
+                    # 5. Kolom Output (Ada Booking Date)
+                    output_cols_list = ['Workzone', 'Date Created Display', 'SC Order No/Track ID/CSRM No', 
+                                        'Service No.', 'Workorder', 'Customer Name', 'Address', 
+                                        'Contact Number', 'CRM Order Type', 'Booking Date']
+                
+                # === MENU 2: MODOROSO ===
+                elif menu == "MODOROSO":
+                    # 1. Filter Regex: -MO | -DO
+                    df = df[df['SC Order No/Track ID/CSRM No'].astype(str).str.contains('-MO|-DO', na=False)]
+                    
+                    # 2. Kolom Cek Duplikat: Workorder (Logic Asli)
+                    check_col = 'Workorder'
+                    
+                    # 3. Kolom Output (Logic Asli TIDAK ADA Booking Date)
+                    output_cols_list = ['Workzone', 'Date Created Display', 'SC Order No/Track ID/CSRM No', 
+                                        'Service No.', 'Workorder', 'Customer Name', 'Address', 
+                                        'Contact Number', 'CRM Order Type']
+
+                # === MENU 3: WAPPR ===
+                elif menu == "WAPPR":
+                    # 1. Filter Regex: AO | PDA
+                    df = df[df['SC Order No/Track ID/CSRM No'].astype(str).str.contains('AO|PDA', na=False)]
+                    
+                    # 2. Filter Status: WAPPR
+                    if 'Status' in df.columns:
+                        df = df[df['Status'] == 'WAPPR']
+                    
+                    # 3. Kolom Cek Duplikat: Workorder (Logic Asli)
+                    check_col = 'Workorder'
+                    
+                    # 4. Kolom Output (Ada Booking Date)
+                    output_cols_list = ['Workzone', 'Date Created Display', 'SC Order No/Track ID/CSRM No', 
+                                        'Service No.', 'Workorder', 'Customer Name', 'Address', 
+                                        'Contact Number', 'CRM Order Type', 'Booking Date']
+
+                # --- STEP 3: RAPIKAN SC ORDER (Split Underscore) ---
+                # Dilakukan setelah filter regex agar filter tetap akurat
                 if 'SC Order No/Track ID/CSRM No' in df.columns:
-                     df['SC Order No/Track ID/CSRM No'] = df['SC Order No/Track ID/CSRM No'].apply(lambda x: str(x).split('_')[0])
+                    df['SC Order No/Track ID/CSRM No'] = df['SC Order No/Track ID/CSRM No'].apply(lambda x: str(x).split('_')[0])
 
-                # 4. Fitur Tambahan: Isi Contact Number Kosong (Khusus WSA)
-                if menu == "WSA" and 'Contact Number' in df.columns and 'Customer Name' in df.columns:
-                    # Buat mapping nama -> kontak
-                    contact_map = df.loc[df['Contact Number'].notna(), ['Customer Name', 'Contact Number']].drop_duplicates('Customer Name')
-                    contact_dict = dict(zip(contact_map['Customer Name'], contact_map['Contact Number']))
-                    
-                    def fill_contact(row):
-                        if pd.isna(row['Contact Number']) or str(row['Contact Number']).strip() == '':
-                            return contact_dict.get(row['Customer Name'], row['Contact Number'])
-                        return row['Contact Number']
-                    
-                    df['Contact Number'] = df.apply(fill_contact, axis=1)
-
-                # --- C. CEK DUPLIKAT ---
+                # --- STEP 4: CEK DUPLIKAT KE GOOGLE SHEETS ---
                 google_data = ws.get_all_records()
                 google_df = pd.DataFrame(google_data)
 
                 if not google_df.empty and check_col in google_df.columns:
+                    # Ambil list ID yang sudah ada di GDoc
                     existing_ids = google_df[check_col].astype(str).unique()
+                    
+                    # Filter data Excel yang TIDAK ada di GDoc
                     df_final = df[~df[check_col].astype(str).isin(existing_ids)].copy()
                 else:
                     df_final = df.copy()
 
-                # --- D. DISPLAY HASIL ---
+                # --- STEP 5: TAMPILAN DASHBOARD ---
                 c1, c2, c3 = st.columns(3)
                 c1.markdown(f'<div class="metric-card">📂 Data Filtered<br><h2>{len(df)}</h2></div>', unsafe_allow_html=True)
-                c2.markdown(f'<div class="metric-card">✨ Data Unik<br><h2>{len(df_final)}</h2></div>', unsafe_allow_html=True)
-                c3.markdown(f'<div class="metric-card">🔗 Sheet<br><h2>{target_sheet_name}</h2></div>', unsafe_allow_html=True)
+                c2.markdown(f'<div class="metric-card">✨ Data Unik (Ready)<br><h2>{len(df_final)}</h2></div>', unsafe_allow_html=True)
+                c3.markdown(f'<div class="metric-card">🔗 Validasi By<br><h5>{check_col}</h5></div>', unsafe_allow_html=True)
 
-                st.subheader("📋 Preview Data")
-                cols_target = ['Workzone', 'Date Created Display', 'SC Order No/Track ID/CSRM No', 
-                               'Service No.', 'Workorder', 'Customer Name', 'Address', 
-                               'Contact Number', 'CRM Order Type']
-                if 'Booking Date' in df_final.columns: cols_target.append('Booking Date')
+                # --- STEP 6: PREVIEW & DOWNLOAD ---
+                st.subheader("📋 Preview Data Unik")
                 
-                cols_final = [c for c in cols_target if c in df_final.columns]
+                # Filter hanya kolom yang tersedia di dataframe
+                cols_final = [c for c in output_cols_list if c in df_final.columns]
+                
+                # Sortir berdasarkan Workzone
                 if 'Workzone' in df_final.columns: df_final = df_final.sort_values('Workzone')
 
                 st.dataframe(df_final[cols_final], use_container_width=True)
@@ -199,4 +245,4 @@ if connection_status and ws:
                 )
 
         except Exception as e:
-            st.error(f"Error Processing: {e}")
+            st.error(f"Terjadi kesalahan: {e}")
