@@ -113,45 +113,49 @@ if connection_status and ws:
                 
                 # === 1. WSA (VALIDATION) ===
                 if menu == "WSA (Validation)":
-                    # Filter Regex
                     df = df[df[col_sc].astype(str).str.contains('AO|PDA|WSA', na=False, case=False)]
-                    # Filter Type: CREATE / MIGRATE
                     if 'CRM Order Type' in df.columns:
                         df = df[df['CRM Order Type'].astype(str).str.strip().str.upper().isin(['CREATE', 'MIGRATE'])]
                     
-                    # Fill Contact
                     if 'Contact Number' in df.columns and 'Customer Name' in df.columns:
                         c_map = df.loc[df['Contact Number'].notna() & (df['Contact Number'] != ''), ['Customer Name', 'Contact Number']].drop_duplicates('Customer Name')
                         c_dict = dict(zip(c_map['Customer Name'], c_map['Contact Number']))
                         df['Contact Number'] = df.apply(lambda r: c_dict.get(r['Customer Name'], r['Contact Number']) if pd.isna(r['Contact Number']) or str(r['Contact Number']).strip() == '' else r['Contact Number'], axis=1)
                     check_col = col_sc
                 
-                # === 2. MODOROSO (UPDATED) ===
+                # === 2. MODOROSO (UPDATED SINGKATAN) ===
                 elif menu == "MODOROSO":
                     # Filter Regex: MO atau DO
                     df = df[df[col_sc].astype(str).str.contains('MO|DO', na=False, case=False)]
                     
-                    # NEW: Filter Type hanya MODIFY dan DISCONNECT
+                    # Filter Type hanya MODIFY dan DISCONNECT
                     if 'CRM Order Type' in df.columns:
-                        # Menggunakan Upper() agar 'Modify' dan 'MODIFY' sama-sama terbaca
-                        # Menambahkan 'DISCONECT' (typo) dan 'DISCONNECT' (baku) untuk keamanan
+                        # 1. Bersihkan dulu (Upper Case & Strip)
+                        df['CRM Order Type'] = df['CRM Order Type'].astype(str).str.strip().str.upper()
+                        
+                        # 2. Filter hanya yang diinginkan
                         allowed_types = ['MODIFY', 'DISCONNECT', 'DISCONECT']
-                        df = df[df['CRM Order Type'].astype(str).str.strip().str.upper().isin(allowed_types)]
+                        df = df[df['CRM Order Type'].isin(allowed_types)]
+                        
+                        # 3. SINGKAT MENJADI MO / DO
+                        replace_map = {
+                            'MODIFY': 'MO',
+                            'DISCONNECT': 'DO',
+                            'DISCONECT': 'DO' # Handle Typo
+                        }
+                        df['CRM Order Type'] = df['CRM Order Type'].replace(replace_map)
                         
                     check_col = 'Workorder'
 
                 # === 3. WAPPR ===
                 elif menu == "WAPPR":
-                    # Filter Regex
                     df = df[df[col_sc].astype(str).str.contains('AO|PDA', na=False, case=False)]
-                    # Filter Status: WAPPR
                     if 'Status' in df.columns:
                         df = df[df['Status'].astype(str).str.strip().str.upper() == 'WAPPR']
                     check_col = 'Workorder'
 
                 # --- B. FILTER BULAN ---
                 if 'Date Created' in df.columns:
-                    # Hapus .0 -> ubah ke datetime
                     df['Date Created DT'] = pd.to_datetime(df['Date Created'].astype(str).str.replace(r'\.0$', '', regex=True), errors='coerce')
                     
                     data_before_month = len(df)
@@ -175,7 +179,6 @@ if connection_status and ws:
                 if not google_df.empty and check_col in google_df.columns:
                     existing_ids = google_df[check_col].astype(str).str.replace(r'\.0$', '', regex=True).str.strip().unique()
                     
-                    # Split SC Order visual hanya setelah filter selesai
                     if col_sc in df.columns:
                         df[col_sc] = df[col_sc].astype(str).apply(lambda x: x.split('_')[0])
                     
