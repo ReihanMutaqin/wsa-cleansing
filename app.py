@@ -122,21 +122,21 @@ if connection_status and ws:
                         df['Contact Number'] = df.apply(lambda r: c_dict.get(r['Customer Name'], r['Contact Number']) if pd.isna(r['Contact Number']) or str(r['Contact Number']).strip() == '' else r['Contact Number'], axis=1)
                     check_col = col_sc
                 
-                # === 2. MODOROSO (NEW LOGIC: BASED ON SC ORDER) ===
+                # === 2. MODOROSO (LOGIC FIX: HANYA LIHAT SC ORDER) ===
                 elif menu == "MODOROSO":
-                    # 1. Filter: Cari TEXT "-MO" atau "-DO" di SC Order (Wajib pakai tanda hubung)
+                    # 1. Filter: Cari TEXT "-MO" atau "-DO" di SC Order (CASE INSENSITIVE)
+                    # Ini akan menangkap '-MO', '-DO', '-mo', '-do' dimanapun posisinya
                     df = df[df[col_sc].astype(str).str.contains(r'-MO|-DO', na=False, case=False)]
                     
-                    # 2. Rename Type: Ubah jadi MO/DO berdasarkan isi SC Order
-                    if 'CRM Order Type' in df.columns:
-                        def get_mo_do(val):
-                            s = str(val).upper()
-                            if '-MO' in s: return 'MO'
-                            if '-DO' in s: return 'DO'
-                            return 'MO' if 'MO' in s else 'DO' # Fallback
-                        
-                        # Timpa kolom CRM Order Type dengan hasil deteksi SC Order
-                        df['CRM Order Type'] = df[col_sc].apply(get_mo_do)
+                    # 2. Logic "Cari Pintar": Tentukan MO/DO dari SC Order, TIMPA CRM Type Asli
+                    def detect_mo_do(val):
+                        s = str(val).upper()
+                        if '-MO' in s: return 'MO'
+                        if '-DO' in s: return 'DO'
+                        return 'MO' # Default fallback jika lolos regex tapi aneh
+                    
+                    # Timpa/Isi kolom CRM Order Type dengan hasil deteksi dari SC Order
+                    df['CRM Order Type'] = df[col_sc].apply(detect_mo_do)
                         
                     check_col = 'Workorder'
 
@@ -155,8 +155,9 @@ if connection_status and ws:
                     if selected_months:
                         df = df[df['Date Created DT'].dt.month.isin(selected_months)]
                     
+                    # Alert jika data hilang karena filter bulan
                     if data_before_month > 0 and len(df) == 0:
-                        st.warning(f"⚠️ PERHATIAN: {data_before_month} data ditemukan, tapi hilang karena filter bulan. Cek menu kiri!")
+                        st.warning(f"⚠️ PERHATIAN: {data_before_month} data ditemukan (MO/DO), tapi hilang karena filter bulan. Cek menu kiri!")
 
                     df['Date Created Display'] = df['Date Created DT'].dt.strftime('%d/%m/%Y %H:%M')
                     df['Date Created'] = df['Date Created Display']
