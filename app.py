@@ -121,21 +121,29 @@ if connection_status and ws:
                 
                 df = df_raw.copy()
 
-                # --- STEP 1: PRE-PROCESSING UMUM (DATE & SC ORDER) ---
+                # --- STEP 1: PRE-PROCESSING UMUM ---
+                
+                # A. Bersihkan Date Created (Hapus .0 dan detik)
                 if 'Date Created' in df.columns:
-                    # Hapus .0 dan ubah ke datetime
-                    df['Date Created DT'] = pd.to_datetime(df['Date Created'].astype(str).str.replace('.0', '', regex=False), errors='coerce')
+                    # Ubah ke string dulu, hapus .0
+                    df['Date Created DT'] = pd.to_datetime(df['Date Created'].astype(str).str.replace(r'\.0$', '', regex=True), errors='coerce')
                     
-                    # Filter Bulan
+                    # Filter Bulan (Jika ada yang dipilih)
                     if selected_months:
                         df = df[df['Date Created DT'].dt.month.isin(selected_months)]
                     
-                    # Format Display sesuai script asli: '%d/%m/%Y %H:%M:%S'
-                    df['Date Created'] = df['Date Created DT'].dt.strftime('%d/%m/%Y %H:%M:%S')
+                    # Format Display (Tanpa Detik)
+                    df['Date Created Display'] = df['Date Created DT'].dt.strftime('%d/%m/%Y %H:%M')
+                    # Timpa kolom asli agar output excel juga rapi
+                    df['Date Created'] = df['Date Created Display']
 
+                # B. Bersihkan Workorder (Hapus .0 agar cocok dengan GDoc)
+                if 'Workorder' in df.columns:
+                    df['Workorder'] = df['Workorder'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
+
+                # C. Bersihkan Booking Date
                 if 'Booking Date' in df.columns:
                     df['Booking Date'] = df['Booking Date'].astype(str).str.split('.').str[0]
-                
                 
                 # --- STEP 2: LOGIKA SPESIFIK (FILTER & LOGIC) ---
                 
@@ -148,36 +156,33 @@ if connection_status and ws:
                     if 'CRM Order Type' in df.columns:
                         df = df[df['CRM Order Type'].isin(['CREATE', 'MIGRATE'])]
                     
-                    # 3. Fitur Khusus WSA: Isi Contact Number Kosong (Logic Asli)
+                    # 3. Fitur Khusus WSA: Isi Contact Number Kosong
                     if 'Contact Number' in df.columns and 'Customer Name' in df.columns:
                         contact_map = df.loc[df['Contact Number'].notna() & (df['Contact Number'] != ''), 
                                            ['Customer Name', 'Contact Number']].drop_duplicates('Customer Name')
                         contact_dict = dict(zip(contact_map['Customer Name'], contact_map['Contact Number']))
                         
                         def fill_contact(row):
-                            if pd.isna(row['Contact Number']) or str(row['Contact Number']).strip() == '':
+                            val = str(row['Contact Number'])
+                            if pd.isna(row['Contact Number']) or val.strip() == '' or val.lower() == 'nan':
                                 return contact_dict.get(row['Customer Name'], row['Contact Number'])
                             return row['Contact Number']
                         
                         df['Contact Number'] = df.apply(fill_contact, axis=1)
                     
-                    # 4. Kolom Cek Duplikat: SC Order No (Logic Asli)
                     check_col = 'SC Order No/Track ID/CSRM No'
-                    
-                    # 5. Kolom Output (Ada Booking Date)
-                    output_cols_list = ['Date Created', 'Workorder','SC Order No/Track ID/CSRM No', 
-                                        'Service No.', 'CRM Order Type', 'Status', 'Address', 
-                                        'Customer Name', 'Workzone', 'Booking Date','Contact Number']
+                    output_cols_list = ['Workzone', 'Date Created', 'SC Order No/Track ID/CSRM No', 
+                                        'Service No.', 'Workorder', 'Customer Name', 'Address', 
+                                        'Contact Number', 'CRM Order Type', 'Booking Date']
                 
                 # === MENU 2: MODOROSO ===
                 elif menu == "MODOROSO":
                     # 1. Filter Regex: -MO | -DO
                     df = df[df['SC Order No/Track ID/CSRM No'].astype(str).str.contains('-MO|-DO', na=False)]
                     
-                    # 2. Kolom Cek Duplikat: Workorder (Logic Asli)
                     check_col = 'Workorder'
                     
-                    # 3. Kolom Output (Logic Asli TIDAK ADA Booking Date)
+                    # Output standar Modoroso
                     output_cols_list = ['Date Created', 'Workorder','SC Order No/Track ID/CSRM No', 
                                         'Service No.', 'CRM Order Type', 'Status', 'Address', 
                                         'Customer Name', 'Workzone', 'Booking Date','Contact Number']
@@ -187,34 +192,39 @@ if connection_status and ws:
                     # 1. Filter Regex: AO | PDA
                     df = df[df['SC Order No/Track ID/CSRM No'].astype(str).str.contains('AO|PDA', na=False)]
                     
-                    # 2. Filter Status: WAPPR
+                    # 2. Filter Status: WAPPR (Pakai Strip dan Upper biar aman)
                     if 'Status' in df.columns:
-                        df = df[df['Status'] == 'WAPPR']
+                        df = df[df['Status'].astype(str).str.strip().str.upper() == 'WAPPR']
                     
-                    # 3. Kolom Cek Duplikat: Workorder (Logic Asli)
                     check_col = 'Workorder'
                     
-                    # 4. Kolom Output (Ada Booking Date)
                     output_cols_list = ['Date Created', 'Workorder','SC Order No/Track ID/CSRM No', 
                                         'Service No.', 'CRM Order Type', 'Status', 'Address', 
                                         'Customer Name', 'Workzone', 'Booking Date','Contact Number']
 
                 # --- STEP 3: RAPIKAN SC ORDER (Split Underscore) ---
-                # Dilakukan setelah filter regex agar filter tetap akurat
                 if 'SC Order No/Track ID/CSRM No' in df.columns:
-                    df['SC Order No/Track ID/CSRM No'] = df['SC Order No/Track ID/CSRM No'].apply(lambda x: str(x).split('_')[0])
+                    # Pastikan jadi string dan ambil bagian depan
+                    df['SC Order No/Track ID/CSRM No'] = df['SC Order No/Track ID/CSRM No'].astype(str).apply(lambda x: x.split('_')[0])
 
                 # --- STEP 4: CEK DUPLIKAT KE GOOGLE SHEETS ---
                 google_data = ws.get_all_records()
                 google_df = pd.DataFrame(google_data)
 
+                # Pastikan kolom kunci ada di Google Sheet dan formatnya STRING bersih
                 if not google_df.empty and check_col in google_df.columns:
-                    # Ambil list ID yang sudah ada di GDoc
-                    existing_ids = google_df[check_col].astype(str).unique()
+                    # Konversi Workorder/SC Order GDoc ke String Bersih (tanpa .0)
+                    existing_ids = google_df[check_col].astype(str).str.replace(r'\.0$', '', regex=True).str.strip().unique()
+                    
+                    # Pastikan kolom kunci di Excel juga String Bersih (sudah dilakukan di atas untuk Workorder)
+                    # Lakukan lagi untuk SC Order jika itu check_col nya
+                    if check_col == 'SC Order No/Track ID/CSRM No':
+                         df[check_col] = df[check_col].astype(str).str.strip()
                     
                     # Filter data Excel yang TIDAK ada di GDoc
-                    df_final = df[~df[check_col].astype(str).isin(existing_ids)].copy()
+                    df_final = df[~df[check_col].isin(existing_ids)].copy()
                 else:
+                    # Jika GDoc kosong atau kolom tidak ketemu, anggap semua data baru
                     df_final = df.copy()
 
                 # --- STEP 5: TAMPILAN DASHBOARD ---
@@ -229,7 +239,7 @@ if connection_status and ws:
                 # Filter hanya kolom yang tersedia di dataframe
                 cols_final = [c for c in output_cols_list if c in df_final.columns]
                 
-                # Sortir berdasarkan Workzone
+                # Sortir berdasarkan Workzone jika ada
                 if 'Workzone' in df_final.columns: df_final = df_final.sort_values('Workzone')
 
                 st.dataframe(df_final[cols_final], use_container_width=True)
@@ -246,8 +256,3 @@ if connection_status and ws:
 
         except Exception as e:
             st.error(f"Terjadi kesalahan: {e}")
-
-
-
-
-
