@@ -79,7 +79,7 @@ if client:
                 st.error(f"Sheet '{target_sheet_name}' tidak ditemukan! Pastikan nama tab di GDoc sesuai.")
                 ws = None
         else:
-            # WSA dan WAPPR: AMBIL SHEET PERTAMA (INDEX 0)
+            # WSA dan WAPPR: AMBIL SHEET PERTAMA
             ws = sh.get_worksheet(0)
             target_sheet_name = ws.title
 
@@ -101,7 +101,6 @@ if connection_status and ws:
     uploaded_file = st.file_uploader(f"Upload Data {menu} (XLSX/CSV)", type=["xlsx", "xls", "csv"])
 
     if uploaded_file:
-        # Baca File
         df = pd.read_csv(uploaded_file) if uploaded_file.name.lower().endswith('.csv') else pd.read_excel(uploaded_file)
             
         try:
@@ -123,27 +122,21 @@ if connection_status and ws:
                         df['Contact Number'] = df.apply(lambda r: c_dict.get(r['Customer Name'], r['Contact Number']) if pd.isna(r['Contact Number']) or str(r['Contact Number']).strip() == '' else r['Contact Number'], axis=1)
                     check_col = col_sc
                 
-                # === 2. MODOROSO (UPDATED SINGKATAN) ===
+                # === 2. MODOROSO (NEW LOGIC: BASED ON SC ORDER) ===
                 elif menu == "MODOROSO":
-                    # Filter Regex: MO atau DO
-                    df = df[df[col_sc].astype(str).str.contains('MO|DO', na=False, case=False)]
+                    # 1. Filter: Cari TEXT "-MO" atau "-DO" di SC Order (Wajib pakai tanda hubung)
+                    df = df[df[col_sc].astype(str).str.contains(r'-MO|-DO', na=False, case=False)]
                     
-                    # Filter Type hanya MODIFY dan DISCONNECT
+                    # 2. Rename Type: Ubah jadi MO/DO berdasarkan isi SC Order
                     if 'CRM Order Type' in df.columns:
-                        # 1. Bersihkan dulu (Upper Case & Strip)
-                        df['CRM Order Type'] = df['CRM Order Type'].astype(str).str.strip().str.upper()
+                        def get_mo_do(val):
+                            s = str(val).upper()
+                            if '-MO' in s: return 'MO'
+                            if '-DO' in s: return 'DO'
+                            return 'MO' if 'MO' in s else 'DO' # Fallback
                         
-                        # 2. Filter hanya yang diinginkan
-                        allowed_types = ['MODIFY', 'DISCONNECT', 'DISCONECT']
-                        df = df[df['CRM Order Type'].isin(allowed_types)]
-                        
-                        # 3. SINGKAT MENJADI MO / DO
-                        replace_map = {
-                            'MODIFY': 'MO',
-                            'DISCONNECT': 'DO',
-                            'DISCONECT': 'DO' # Handle Typo
-                        }
-                        df['CRM Order Type'] = df['CRM Order Type'].replace(replace_map)
+                        # Timpa kolom CRM Order Type dengan hasil deteksi SC Order
+                        df['CRM Order Type'] = df[col_sc].apply(get_mo_do)
                         
                     check_col = 'Workorder'
 
@@ -163,7 +156,7 @@ if connection_status and ws:
                         df = df[df['Date Created DT'].dt.month.isin(selected_months)]
                     
                     if data_before_month > 0 and len(df) == 0:
-                        st.warning(f"⚠️ PERHATIAN: Ada {data_before_month} data yang cocok, TAPI hilang karena filternya beda bulan. Cek menu 'Filter Bulan' di kiri!")
+                        st.warning(f"⚠️ PERHATIAN: {data_before_month} data ditemukan, tapi hilang karena filter bulan. Cek menu kiri!")
 
                     df['Date Created Display'] = df['Date Created DT'].dt.strftime('%d/%m/%Y %H:%M')
                     df['Date Created'] = df['Date Created Display']
