@@ -133,8 +133,8 @@ if connection_status and ws:
                         df = df[df['Date Created DT'].dt.month.isin(selected_months)]
                     
                     # Format Display (Tanpa Detik)
-                    df['Date Created Display'] = df['Date Created DT'].dt.strftime('%d/%m/%Y %H:%M')
-                    # Timpa kolom asli agar output excel juga rapi
+                    df['Date Created Display'] = df['Date Created DT'].dt.strftime('%d/%m/%Y %H:%M:%S')
+                    # Timpa kolom asli agar output excel juga rapi:
                     df['Date Created'] = df['Date Created Display']
 
                 # B. Bersihkan Workorder (Hapus .0 agar cocok dengan GDoc)
@@ -256,4 +256,5 @@ if connection_status and ws:
 
         except Exception as e:
             st.error(f"Terjadi kesalahan: {e}")
+
 
