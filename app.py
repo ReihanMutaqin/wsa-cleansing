@@ -131,7 +131,7 @@ if connection_status and ws:
                         df = df[df['Date Created DT'].dt.month.isin(selected_months)]
                     
                     # Format Display sesuai script asli: '%d/%m/%Y %H:%M:%S'
-                    df['Date Created Display'] = df['Date Created DT'].dt.strftime('%d/%m/%Y %H:%M:%S')
+                    df['Date Created'] = df['Date Created DT'].dt.strftime('%d/%m/%Y %H:%M:%S')
 
                 if 'Booking Date' in df.columns:
                     df['Booking Date'] = df['Booking Date'].astype(str).str.split('.').str[0]
@@ -246,6 +246,7 @@ if connection_status and ws:
 
         except Exception as e:
             st.error(f"Terjadi kesalahan: {e}")
+
 
 
 
