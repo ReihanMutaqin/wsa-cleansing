@@ -198,7 +198,7 @@ if connection_status and ws:
                 # 1. Bersihkan Data Umum
                 df = clean_common_data(df_raw.copy())
 
-                # 2. Panggil Fungsi Logika Berdasarkan Menu (DIPISAH DI SINI)
+                # 2. Panggil Fungsi Logika Berdasarkan Menu
                 if menu == "WSA (Validation)":
                     df_filtered, check_col = proses_wsa(df)
                 elif menu == "MODOROSO":
@@ -240,10 +240,19 @@ if connection_status and ws:
                         df_filtered[col_sc] = df_filtered[col_sc].astype(str).apply(lambda x: x.split('_')[0])
                     df_final = df_filtered.copy()
 
-                # 5. Tampilkan Hasil (Urutan Kolom Sama)
-                target_order = ['Date Created', 'Workorder', 'SC Order No/Track ID/CSRM No', 
-                                'Service No.', 'CRM Order Type', 'Status', 'Address', 
-                                'Customer Name', 'Workzone', 'Booking Date', 'Contact Number']
+                # 5. Tampilkan Hasil (KOLOM DISESUAIKAN PER MENU)
+                # ------------------------------------------------------------------
+                if menu == "MODOROSO":
+                    # Modoroso: TANPA Booking Date
+                    target_order = ['Date Created', 'Workorder', 'SC Order No/Track ID/CSRM No', 
+                                    'Service No.', 'CRM Order Type', 'Status', 'Address', 
+                                    'Customer Name', 'Workzone', 'Contact Number']
+                else:
+                    # WSA & WAPPR: PAKAI Booking Date
+                    target_order = ['Date Created', 'Workorder', 'SC Order No/Track ID/CSRM No', 
+                                    'Service No.', 'CRM Order Type', 'Status', 'Address', 
+                                    'Customer Name', 'Workzone', 'Booking Date', 'Contact Number']
+                # ------------------------------------------------------------------
                 
                 cols_final = [c for c in target_order if c in df_final.columns]
                 
