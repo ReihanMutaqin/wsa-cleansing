@@ -110,26 +110,33 @@ if connection_status and ws:
                 
                 # --- A. LOGIKA FILTERING ---
                 
-                # === 1. WSA (VALIDATION) - LOGIKA AWAL ===
+                # === 1. WSA (VALIDATION) - LOGIKA ORIGINAL ===
                 if menu == "WSA (Validation)":
-                    # Filter 1: SC Order mengandung AO/PDA/WSA (Tanpa case=False, sesuai asli)
+                    # 1. Filter Regex: AO | PDA | WSA (Case Sensitive sesuai kode asli)
                     df = df[df[col_sc].astype(str).str.contains('AO|PDA|WSA', na=False)]
                     
-                    # Filter 2: CRM Type harus CREATE atau MIGRATE
+                    # 2. Filter CRM Order Type: CREATE | MIGRATE
                     if 'CRM Order Type' in df.columns:
                         df = df[df['CRM Order Type'].isin(['CREATE', 'MIGRATE'])]
                     
-                    # Fitur: Isi Contact Number Kosong (Sesuai script asli)
+                    # 3. Fitur Khusus WSA: Isi Contact Number Kosong
                     if 'Contact Number' in df.columns and 'Customer Name' in df.columns:
                         c_map = df.loc[df['Contact Number'].notna() & (df['Contact Number'] != ''), ['Customer Name', 'Contact Number']].drop_duplicates('Customer Name')
                         c_dict = dict(zip(c_map['Customer Name'], c_map['Contact Number']))
-                        df['Contact Number'] = df.apply(lambda r: c_dict.get(r['Customer Name'], r['Contact Number']) if pd.isna(r['Contact Number']) or str(r['Contact Number']).strip() == '' else r['Contact Number'], axis=1)
+                        
+                        def fill_contact(row):
+                            val = str(row['Contact Number'])
+                            if pd.isna(row['Contact Number']) or val.strip() == '' or val.lower() == 'nan':
+                                return c_dict.get(row['Customer Name'], row['Contact Number'])
+                            return row['Contact Number']
+                        
+                        df['Contact Number'] = df.apply(fill_contact, axis=1)
                     
                     check_col = col_sc
                 
-                # === 2. MODOROSO (LOGIKA BARU: DETEKSI SC ORDER) ===
+                # === 2. MODOROSO (LOGIKA PINTAR: DETEKSI SC ORDER -MO/-DO) ===
                 elif menu == "MODOROSO":
-                    # 1. Filter: Cari "-MO" atau "-DO" di SC Order (Pakai tanda hubung)
+                    # 1. Filter: Cari "-MO" atau "-DO" di SC Order (Pakai tanda hubung, case insensitive)
                     df = df[df[col_sc].astype(str).str.contains(r'-MO|-DO', na=False, case=False)]
                     
                     # 2. Rename Type: Ubah jadi MO/DO berdasarkan isi SC Order
@@ -159,7 +166,6 @@ if connection_status and ws:
                     if selected_months:
                         df = df[df['Date Created DT'].dt.month.isin(selected_months)]
                     
-                    # Alert jika data hilang karena filter bulan
                     if data_before_month > 0 and len(df) == 0:
                         st.warning(f"⚠️ PERHATIAN: {data_before_month} data ditemukan, tapi hilang karena filter bulan. Cek menu kiri!")
 
@@ -178,19 +184,19 @@ if connection_status and ws:
                     # Ambil list ID yang sudah ada (bersihkan .0)
                     existing_ids = google_df[check_col].astype(str).str.replace(r'\.0$', '', regex=True).str.strip().unique()
                     
-                    # Bersihkan ID di data Excel sebelum cek (Split SC Order visual nanti saja)
-                    # Tapi untuk cek duplikat WSA, kita perlu format yang sama.
-                    # Di script asli WSA, split SC Order dilakukan DI AWAL.
-                    # Kita lakukan split SC Order dulu jika menu WSA
+                    # Bersihkan ID di data Excel untuk perbandingan
+                    # Jika WSA (check_col=SC Order), kita harus split dulu untuk pencocokan yang tepat jika di GDoc sudah displit
+                    # Tapi sesuai script asli, WSA filternya split dulu baru cek duplikat.
                     
                     if col_sc in df.columns:
-                         df[col_sc] = df[col_sc].astype(str).apply(lambda x: x.split('_')[0])
+                        # Split SC Order visual & logic (ambil bagian depan sebelum _)
+                        df[col_sc] = df[col_sc].astype(str).apply(lambda x: x.split('_')[0])
                     
                     # Filter data yang TIDAK ada di GDoc
                     df_final = df[~df[check_col].astype(str).str.strip().isin(existing_ids)].copy()
                 else:
                     if col_sc in df.columns:
-                         df[col_sc] = df[col_sc].astype(str).apply(lambda x: x.split('_')[0])
+                        df[col_sc] = df[col_sc].astype(str).apply(lambda x: x.split('_')[0])
                     df_final = df.copy()
 
                 # --- E. OUTPUT DISPLAY ---
