@@ -124,7 +124,7 @@ if connection_status and ws:
                 # --- STEP 1: PRE-PROCESSING UMUM (DATE & SC ORDER) ---
                 if 'Date Created' in df.columns:
                     # Hapus .0 dan ubah ke datetime
-                    df['Date Created'] = pd.to_datetime(df['Date Created'].astype(str).str.replace('.0', '', regex=False), errors='coerce')
+                    df['Date Created DT'] = pd.to_datetime(df['Date Created'].astype(str).str.replace('.0', '', regex=False), errors='coerce')
                     
                     # Filter Bulan
                     if selected_months:
@@ -246,6 +246,7 @@ if connection_status and ws:
 
         except Exception as e:
             st.error(f"Terjadi kesalahan: {e}")
+
 
 
 
