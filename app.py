@@ -165,9 +165,9 @@ if connection_status and ws:
                     check_col = 'SC Order No/Track ID/CSRM No'
                     
                     # 5. Kolom Output (Ada Booking Date)
-                    output_cols_list = ['Workzone', 'Date Created Display', 'SC Order No/Track ID/CSRM No', 
-                                        'Service No.', 'Workorder', 'Customer Name', 'Address', 
-                                        'Contact Number', 'CRM Order Type', 'Booking Date']
+                    output_cols_list = ['Date Created', 'Workorder','SC Order No/Track ID/CSRM No', 
+                                        'Service No.', 'CRM Order Typ', 'Status', 'Address', 
+                                        'Customer Name', 'Workzone', 'Booking Date','Contact Number']
                 
                 # === MENU 2: MODOROSO ===
                 elif menu == "MODOROSO":
@@ -178,9 +178,9 @@ if connection_status and ws:
                     check_col = 'Workorder'
                     
                     # 3. Kolom Output (Logic Asli TIDAK ADA Booking Date)
-                    output_cols_list = ['Workzone', 'Date Created Display', 'SC Order No/Track ID/CSRM No', 
-                                        'Service No.', 'Workorder', 'Customer Name', 'Address', 
-                                        'Contact Number', 'CRM Order Type']
+                    output_cols_list = ['Date Created', 'Workorder','SC Order No/Track ID/CSRM No', 
+                                        'Service No.', 'CRM Order Typ', 'Status', 'Address', 
+                                        'Customer Name', 'Workzone', 'Booking Date','Contact Number']
 
                 # === MENU 3: WAPPR ===
                 elif menu == "WAPPR":
@@ -195,9 +195,9 @@ if connection_status and ws:
                     check_col = 'Workorder'
                     
                     # 4. Kolom Output (Ada Booking Date)
-                    output_cols_list = ['Workzone', 'Date Created Display', 'SC Order No/Track ID/CSRM No', 
-                                        'Service No.', 'Workorder', 'Customer Name', 'Address', 
-                                        'Contact Number', 'CRM Order Type', 'Booking Date']
+                    output_cols_list = ['Date Created', 'Workorder','SC Order No/Track ID/CSRM No', 
+                                        'Service No.', 'CRM Order Typ', 'Status', 'Address', 
+                                        'Customer Name', 'Workzone', 'Booking Date','Contact Number']
 
                 # --- STEP 3: RAPIKAN SC ORDER (Split Underscore) ---
                 # Dilakukan setelah filter regex agar filter tetap akurat
@@ -246,3 +246,4 @@ if connection_status and ws:
 
         except Exception as e:
             st.error(f"Terjadi kesalahan: {e}")
+
