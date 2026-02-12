@@ -4,7 +4,6 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import io
 from datetime import datetime
-import streamlit.components.v1 as components  # PENTING: Import ini untuk fitur Copy
 
 # ==========================================
 # 1. KONFIGURASI HALAMAN & CSS
@@ -56,14 +55,10 @@ def get_gspread_client():
 
 # --- Helper: Bersihkan Format Standar ---
 def clean_common_data(df):
-    # Bersihkan Workorder (hapus .0)
     if 'Workorder' in df.columns:
         df['Workorder'] = df['Workorder'].astype(str).str.replace(r'\.0$', '', regex=True).str.strip()
-    
-    # Bersihkan Booking Date
     if 'Booking Date' in df.columns:
         df['Booking Date'] = df['Booking Date'].astype(str).str.split('.').str[0]
-        
     return df
 
 # --- LOGIKA 1: WSA (VALIDATION) ---
@@ -143,7 +138,6 @@ ws = None
 if client:
     try:
         sh = client.open("Salinan dari NEW GDOC WSA FULFILLMENT")
-        
         if menu == "MODOROSO":
             target_sheet_name = "MODOROSO_JAKTIMSEL"
             try:
@@ -192,7 +186,6 @@ if connection_status and ws:
                 # 3. Filter Bulan
                 if 'Date Created' in df_filtered.columns:
                     df_filtered['Date Created DT'] = pd.to_datetime(df_filtered['Date Created'].astype(str).str.replace(r'\.0$', '', regex=True), errors='coerce')
-                    
                     data_count_before = len(df_filtered)
                     if selected_months:
                         df_filtered = df_filtered[df_filtered['Date Created DT'].dt.month.isin(selected_months)]
@@ -221,7 +214,7 @@ if connection_status and ws:
                         df_filtered[col_sc] = df_filtered[col_sc].astype(str).apply(lambda x: x.split('_')[0])
                     df_final = df_filtered.copy()
 
-                # 5. Display & Export
+                # 5. Output Kolom
                 if menu == "MODOROSO":
                     target_order = ['Date Created', 'Workorder', 'SC Order No/Track ID/CSRM No', 
                                     'Service No.', 'CRM Order Type', 'Status', 'Address', 
@@ -243,70 +236,28 @@ if connection_status and ws:
                 if 'Workzone' in df_final.columns: df_final = df_final.sort_values('Workzone')
                 st.dataframe(df_final[cols_final], use_container_width=True)
 
-                # --- 6. TOMBOL DOWNLOAD & COPY ---
+                # --- 6. TOMBOL DOWNLOAD & COPY BAWAAN STREAMLIT ---
+                st.markdown("---")
                 
-                # Persiapan Data
+                # Setup Download
                 excel_buffer = io.BytesIO()
                 with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
                     df_final[cols_final].to_excel(writer, index=False)
                 
-                # Persiapan Data untuk Clipboard (Format TSV agar rapi di Excel)
+                st.download_button(
+                    label=f"📥 Download Hasil {menu} (Excel)", 
+                    data=excel_buffer.getvalue(), 
+                    file_name=f"Cleaned_{menu}_{datetime.now().strftime('%d%m%Y')}.xlsx",
+                    use_container_width=True
+                )
+                
+                # Setup Copy Text
+                st.markdown("<br>", unsafe_allow_html=True)
+                st.info("💡 **TIPS COPY CEPAT:** Arahkan kursor ke pojok kanan atas kotak hitam di bawah ini, lalu klik icon **📋 Copy**. Setelah itu kamu bisa langsung Paste (Ctrl+V) ke Excel atau Google Sheets!")
+                
+                # Buat data format TSV (Tab Separated Values) agar rapi kalau dipaste ke excel
                 tsv_data = df_final[cols_final].to_csv(index=False, sep='\t')
-                # Escape karakter agar aman di JS
-                tsv_data_js = tsv_data.replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")
-
-                # Layout Tombol
-                btn_col1, btn_col2 = st.columns([1, 1])
-                
-                with btn_col1:
-                    st.download_button(
-                        label=f"📥 Download Excel", 
-                        data=excel_buffer.getvalue(), 
-                        file_name=f"Cleaned_{menu}_{datetime.now().strftime('%d%m%Y')}.xlsx",
-                        use_container_width=True
-                    )
-                
-                with btn_col2:
-                    # Tombol Copy Menggunakan HTML/JS
-                    components.html(f"""
-                    <div style="display: flex; align-items: center; justify-content: center; height: 100%;">
-                        <button id="copyBtn" onclick="copyToClipboard()" style="
-                            background-color: #262730; 
-                            color: white; 
-                            border: 1px solid #454655; 
-                            padding: 0.6rem 1rem; 
-                            border-radius: 8px; 
-                            cursor: pointer;
-                            font-family: 'Source Sans Pro', sans-serif;
-                            font-weight: 600;
-                            font-size: 1rem;
-                            width: 100%;">
-                            📋 Salin ke Clipboard (Excel/GSheets)
-                        </button>
-                    </div>
-                    <script>
-                    function copyToClipboard() {{
-                        const str = `{tsv_data_js}`;
-                        const el = document.createElement('textarea');
-                        el.value = str;
-                        document.body.appendChild(el);
-                        el.select();
-                        document.execCommand('copy');
-                        document.body.removeChild(el);
-                        
-                        const btn = document.getElementById("copyBtn");
-                        btn.innerText = "✅ Berhasil Disalin!";
-                        btn.style.backgroundColor = "#1c4f2e";
-                        btn.style.borderColor = "#4caf50";
-                        
-                        setTimeout(() => {{
-                            btn.innerText = "📋 Salin ke Clipboard (Excel/GSheets)";
-                            btn.style.backgroundColor = "#262730";
-                            btn.style.borderColor = "#454655";
-                        }}, 2000);
-                    }}
-                    </script>
-                    """, height=60)
+                st.code(tsv_data, language="text")
 
         except Exception as e:
             st.error(f"Terjadi kesalahan: {e}")
