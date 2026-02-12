@@ -86,7 +86,6 @@ def proses_wsa(df):
 # --- LOGIKA 2: MODOROSO ---
 def proses_modoroso(df):
     col_sc = 'SC Order No/Track ID/CSRM No'
-    # Copy agar aman dari SettingWithCopyWarning
     df = df[df[col_sc].astype(str).str.contains(r'-MO|-DO', na=False, case=False)].copy()
     
     if 'CRM Order Type' in df.columns:
@@ -97,7 +96,6 @@ def proses_modoroso(df):
             return 'MO'
         df['CRM Order Type'] = df[col_sc].apply(detect_mo_do)
     
-    # TAMBAHAN FITUR: Tambah teks TSEL
     df['Mitra'] = 'TSEL'
     
     return df, 'Workorder'
@@ -138,7 +136,6 @@ st.title(f"🚀 Dashboard {menu}")
 client = get_gspread_client()
 ws = None
 
-# A. SETUP SHEET TARGET
 if client:
     try:
         sh = client.open("Salinan dari NEW GDOC WSA FULFILLMENT")
@@ -166,7 +163,6 @@ else:
     st.error("Gagal membaca Secrets API.")
     connection_status = False
 
-# B. UPLOAD & PROSES FILE
 if connection_status and ws:
     uploaded_file = st.file_uploader(f"Upload Data {menu} (XLSX/CSV)", type=["xlsx", "xls", "csv"])
 
@@ -176,10 +172,8 @@ if connection_status and ws:
         try:
             with st.spinner(f"Memproses {menu}..."):
                 
-                # 1. Cleaning Common
                 df = clean_common_data(df_raw.copy())
 
-                # 2. Logika Menu
                 if menu == "WSA (Validation)":
                     df_filtered, check_col = proses_wsa(df)
                 elif menu == "MODOROSO":
@@ -187,7 +181,6 @@ if connection_status and ws:
                 elif menu == "WAPPR":
                     df_filtered, check_col = proses_wappr(df)
 
-                # 3. Filter Bulan
                 if 'Date Created' in df_filtered.columns:
                     df_filtered['Date Created DT'] = pd.to_datetime(df_filtered['Date Created'].astype(str).str.replace(r'\.0$', '', regex=True), errors='coerce')
                     data_count_before = len(df_filtered)
@@ -200,7 +193,6 @@ if connection_status and ws:
                     df_filtered['Date Created Display'] = df_filtered['Date Created DT'].dt.strftime('%d/%m/%Y %H:%M')
                     df_filtered['Date Created'] = df_filtered['Date Created Display']
 
-                # 4. Cek Duplikat
                 google_data = ws.get_all_records()
                 google_df = pd.DataFrame(google_data)
                 
@@ -218,9 +210,7 @@ if connection_status and ws:
                         df_filtered[col_sc] = df_filtered[col_sc].astype(str).apply(lambda x: x.split('_')[0])
                     df_final = df_filtered.copy()
 
-                # 5. Output Kolom
                 if menu == "MODOROSO":
-                    # Ditambahkan kolom 'Mitra' yang isinya TSEL
                     target_order = ['Date Created', 'Workorder', 'SC Order No/Track ID/CSRM No', 
                                     'Service No.', 'CRM Order Type', 'Status', 'Address', 
                                     'Customer Name', 'Workzone', 'Contact Number', 'Mitra']
@@ -231,7 +221,6 @@ if connection_status and ws:
                 
                 cols_final = [c for c in target_order if c in df_final.columns]
                 
-                # METRICS
                 c1, c2, c3 = st.columns(3)
                 c1.markdown(f'<div class="metric-card">📂 Data Filtered<br><h2>{len(df_filtered)}</h2></div>', unsafe_allow_html=True)
                 c2.markdown(f'<div class="metric-card">✨ Data Unik<br><h2>{len(df_final)}</h2></div>', unsafe_allow_html=True)
@@ -241,7 +230,6 @@ if connection_status and ws:
                 if 'Workzone' in df_final.columns: df_final = df_final.sort_values('Workzone')
                 st.dataframe(df_final[cols_final], use_container_width=True)
 
-                # --- 6. TOMBOL DOWNLOAD & COPY TEXT AREA ---
                 st.markdown("---")
                 
                 excel_buffer = io.BytesIO()
@@ -254,15 +242,6 @@ if connection_status and ws:
                     file_name=f"Cleaned_{menu}_{datetime.now().strftime('%d%m%Y')}.xlsx",
                     use_container_width=True
                 )
-                
-                st.markdown("<br>", unsafe_allow_html=True)
-                st.info("💡 **CARA COPY CEPAT:** Klik di dalam kotak teks di bawah ini, tekan **Ctrl + A** (pilih semua), lalu tekan **Ctrl + C** (copy). Setelah itu langsung Paste (Ctrl + V) di Excel/GSheets!")
-                
-                # Buat data format TSV (Tab Separated Values) agar rapi kalau dipaste ke excel
-                tsv_data = df_final[cols_final].to_csv(index=False, sep='\t')
-                
-                # Menampilkan Text Area
-                st.text_area("Data Siap Copy (Format Rapi):", value=tsv_data, height=300)
 
         except Exception as e:
             st.error(f"Terjadi kesalahan: {e}")
