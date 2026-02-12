@@ -4,6 +4,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import io
 from datetime import datetime
+import streamlit.components.v1 as components  # PENTING: Import ini untuk fitur Copy
 
 # ==========================================
 # 1. KONFIGURASI HALAMAN & CSS
@@ -66,18 +67,13 @@ def clean_common_data(df):
     return df
 
 # --- LOGIKA 1: WSA (VALIDATION) ---
-# Menggunakan Logika Awal/Original (Case Sensitive, Create/Migrate, Fill Contact)
 def proses_wsa(df):
     col_sc = 'SC Order No/Track ID/CSRM No'
-    
-    # 1. Filter Regex Strict (Case Sensitive)
     df = df[df[col_sc].astype(str).str.contains('AO|PDA|WSA', na=False)]
     
-    # 2. Filter Type: CREATE / MIGRATE
     if 'CRM Order Type' in df.columns:
         df = df[df['CRM Order Type'].isin(['CREATE', 'MIGRATE'])]
     
-    # 3. Fitur Khusus: Isi Contact Number Kosong
     if 'Contact Number' in df.columns and 'Customer Name' in df.columns:
         c_map = df.loc[df['Contact Number'].notna() & (df['Contact Number'] != ''), ['Customer Name', 'Contact Number']].drop_duplicates('Customer Name')
         c_dict = dict(zip(c_map['Customer Name'], c_map['Contact Number']))
@@ -90,43 +86,31 @@ def proses_wsa(df):
         
         df['Contact Number'] = df.apply(fill_contact, axis=1)
     
-    # Return: Dataframe hasil filter & Kolom Kunci Cek Duplikat
     return df, col_sc
 
 # --- LOGIKA 2: MODOROSO ---
-# Menggunakan Logika Baru (Cari -MO/-DO di SC Order, Auto Rename CRM Type)
 def proses_modoroso(df):
     col_sc = 'SC Order No/Track ID/CSRM No'
-    
-    # 1. Filter: Cari "-MO" atau "-DO" (Case Insensitive)
     df = df[df[col_sc].astype(str).str.contains(r'-MO|-DO', na=False, case=False)]
     
-    # 2. Rename Type Otomatis
     if 'CRM Order Type' in df.columns:
         def detect_mo_do(val):
             s = str(val).upper()
             if '-MO' in s: return 'MO'
             if '-DO' in s: return 'DO'
-            return 'MO' # Default fallback
-        
+            return 'MO'
         df['CRM Order Type'] = df[col_sc].apply(detect_mo_do)
     
-    # Return: Dataframe hasil filter & Kolom Kunci Cek Duplikat (Workorder)
     return df, 'Workorder'
 
 # --- LOGIKA 3: WAPPR ---
-# Menggunakan Logika Standar WAPPR
 def proses_wappr(df):
     col_sc = 'SC Order No/Track ID/CSRM No'
-    
-    # 1. Filter Regex AO/PDA
     df = df[df[col_sc].astype(str).str.contains('AO|PDA', na=False)]
     
-    # 2. Filter Status WAPPR
     if 'Status' in df.columns:
         df = df[df['Status'].astype(str).str.strip().str.upper() == 'WAPPR']
     
-    # Return: Dataframe hasil filter & Kolom Kunci Cek Duplikat (Workorder)
     return df, 'Workorder'
 
 # ==========================================
@@ -168,7 +152,6 @@ if client:
                 st.error(f"Sheet '{target_sheet_name}' tidak ditemukan! Cek nama tab GDoc.")
                 ws = None
         else:
-            # WSA & WAPPR: Ambil Sheet Index 0
             ws = sh.get_worksheet(0)
             target_sheet_name = ws.title
 
@@ -195,10 +178,10 @@ if connection_status and ws:
         try:
             with st.spinner(f"Memproses {menu}..."):
                 
-                # 1. Bersihkan Data Umum
+                # 1. Cleaning Common
                 df = clean_common_data(df_raw.copy())
 
-                # 2. Panggil Fungsi Logika Berdasarkan Menu
+                # 2. Logika Menu
                 if menu == "WSA (Validation)":
                     df_filtered, check_col = proses_wsa(df)
                 elif menu == "MODOROSO":
@@ -206,7 +189,7 @@ if connection_status and ws:
                 elif menu == "WAPPR":
                     df_filtered, check_col = proses_wappr(df)
 
-                # 3. Filter Bulan (Common Logic)
+                # 3. Filter Bulan
                 if 'Date Created' in df_filtered.columns:
                     df_filtered['Date Created DT'] = pd.to_datetime(df_filtered['Date Created'].astype(str).str.replace(r'\.0$', '', regex=True), errors='coerce')
                     
@@ -214,21 +197,19 @@ if connection_status and ws:
                     if selected_months:
                         df_filtered = df_filtered[df_filtered['Date Created DT'].dt.month.isin(selected_months)]
                     
-                    # Warning jika data habis karena bulan
                     if data_count_before > 0 and len(df_filtered) == 0:
-                        st.warning(f"⚠️ {data_count_before} data ditemukan, tapi hilang karena filter bulan tidak sesuai.")
+                        st.warning(f"⚠️ {data_count_before} data ditemukan, tapi hilang karena filter bulan.")
 
                     df_filtered['Date Created Display'] = df_filtered['Date Created DT'].dt.strftime('%d/%m/%Y %H:%M')
                     df_filtered['Date Created'] = df_filtered['Date Created Display']
 
-                # 4. Cek Duplikat ke GDoc (Common Logic)
+                # 4. Cek Duplikat
                 google_data = ws.get_all_records()
                 google_df = pd.DataFrame(google_data)
                 
                 if not google_df.empty and check_col in google_df.columns:
                     existing_ids = google_df[check_col].astype(str).str.replace(r'\.0$', '', regex=True).str.strip().unique()
                     
-                    # Khusus WSA, kita samakan format SC Order sebelum cek
                     col_sc = 'SC Order No/Track ID/CSRM No'
                     if col_sc in df_filtered.columns:
                         df_filtered[col_sc] = df_filtered[col_sc].astype(str).apply(lambda x: x.split('_')[0])
@@ -240,22 +221,19 @@ if connection_status and ws:
                         df_filtered[col_sc] = df_filtered[col_sc].astype(str).apply(lambda x: x.split('_')[0])
                     df_final = df_filtered.copy()
 
-                # 5. Tampilkan Hasil (KOLOM DISESUAIKAN PER MENU)
-                # ------------------------------------------------------------------
+                # 5. Display & Export
                 if menu == "MODOROSO":
-                    # Modoroso: TANPA Booking Date
                     target_order = ['Date Created', 'Workorder', 'SC Order No/Track ID/CSRM No', 
                                     'Service No.', 'CRM Order Type', 'Status', 'Address', 
                                     'Customer Name', 'Workzone', 'Contact Number']
                 else:
-                    # WSA & WAPPR: PAKAI Booking Date
                     target_order = ['Date Created', 'Workorder', 'SC Order No/Track ID/CSRM No', 
                                     'Service No.', 'CRM Order Type', 'Status', 'Address', 
                                     'Customer Name', 'Workzone', 'Booking Date', 'Contact Number']
-                # ------------------------------------------------------------------
                 
                 cols_final = [c for c in target_order if c in df_final.columns]
                 
+                # METRICS
                 c1, c2, c3 = st.columns(3)
                 c1.markdown(f'<div class="metric-card">📂 Data Filtered<br><h2>{len(df_filtered)}</h2></div>', unsafe_allow_html=True)
                 c2.markdown(f'<div class="metric-card">✨ Data Unik<br><h2>{len(df_final)}</h2></div>', unsafe_allow_html=True)
@@ -265,15 +243,70 @@ if connection_status and ws:
                 if 'Workzone' in df_final.columns: df_final = df_final.sort_values('Workzone')
                 st.dataframe(df_final[cols_final], use_container_width=True)
 
-                output = io.BytesIO()
-                with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+                # --- 6. TOMBOL DOWNLOAD & COPY ---
+                
+                # Persiapan Data
+                excel_buffer = io.BytesIO()
+                with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
                     df_final[cols_final].to_excel(writer, index=False)
                 
-                st.download_button(
-                    label=f"📥 Download Hasil {menu}", 
-                    data=output.getvalue(), 
-                    file_name=f"Cleaned_{menu}_{datetime.now().strftime('%d%m%Y')}.xlsx"
-                )
+                # Persiapan Data untuk Clipboard (Format TSV agar rapi di Excel)
+                tsv_data = df_final[cols_final].to_csv(index=False, sep='\t')
+                # Escape karakter agar aman di JS
+                tsv_data_js = tsv_data.replace("\\", "\\\\").replace("`", "\\`").replace("$", "\\$")
+
+                # Layout Tombol
+                btn_col1, btn_col2 = st.columns([1, 1])
+                
+                with btn_col1:
+                    st.download_button(
+                        label=f"📥 Download Excel", 
+                        data=excel_buffer.getvalue(), 
+                        file_name=f"Cleaned_{menu}_{datetime.now().strftime('%d%m%Y')}.xlsx",
+                        use_container_width=True
+                    )
+                
+                with btn_col2:
+                    # Tombol Copy Menggunakan HTML/JS
+                    components.html(f"""
+                    <div style="display: flex; align-items: center; justify-content: center; height: 100%;">
+                        <button id="copyBtn" onclick="copyToClipboard()" style="
+                            background-color: #262730; 
+                            color: white; 
+                            border: 1px solid #454655; 
+                            padding: 0.6rem 1rem; 
+                            border-radius: 8px; 
+                            cursor: pointer;
+                            font-family: 'Source Sans Pro', sans-serif;
+                            font-weight: 600;
+                            font-size: 1rem;
+                            width: 100%;">
+                            📋 Salin ke Clipboard (Excel/GSheets)
+                        </button>
+                    </div>
+                    <script>
+                    function copyToClipboard() {{
+                        const str = `{tsv_data_js}`;
+                        const el = document.createElement('textarea');
+                        el.value = str;
+                        document.body.appendChild(el);
+                        el.select();
+                        document.execCommand('copy');
+                        document.body.removeChild(el);
+                        
+                        const btn = document.getElementById("copyBtn");
+                        btn.innerText = "✅ Berhasil Disalin!";
+                        btn.style.backgroundColor = "#1c4f2e";
+                        btn.style.borderColor = "#4caf50";
+                        
+                        setTimeout(() => {{
+                            btn.innerText = "📋 Salin ke Clipboard (Excel/GSheets)";
+                            btn.style.backgroundColor = "#262730";
+                            btn.style.borderColor = "#454655";
+                        }}, 2000);
+                    }}
+                    </script>
+                    """, height=60)
 
         except Exception as e:
             st.error(f"Terjadi kesalahan: {e}")
