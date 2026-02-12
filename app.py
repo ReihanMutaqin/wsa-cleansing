@@ -86,7 +86,8 @@ def proses_wsa(df):
 # --- LOGIKA 2: MODOROSO ---
 def proses_modoroso(df):
     col_sc = 'SC Order No/Track ID/CSRM No'
-    df = df[df[col_sc].astype(str).str.contains(r'-MO|-DO', na=False, case=False)]
+    # Copy agar aman dari SettingWithCopyWarning
+    df = df[df[col_sc].astype(str).str.contains(r'-MO|-DO', na=False, case=False)].copy()
     
     if 'CRM Order Type' in df.columns:
         def detect_mo_do(val):
@@ -95,6 +96,9 @@ def proses_modoroso(df):
             if '-DO' in s: return 'DO'
             return 'MO'
         df['CRM Order Type'] = df[col_sc].apply(detect_mo_do)
+    
+    # TAMBAHAN FITUR: Tambah teks TSEL
+    df['Mitra'] = 'TSEL'
     
     return df, 'Workorder'
 
@@ -216,9 +220,10 @@ if connection_status and ws:
 
                 # 5. Output Kolom
                 if menu == "MODOROSO":
+                    # Ditambahkan kolom 'Mitra' yang isinya TSEL
                     target_order = ['Date Created', 'Workorder', 'SC Order No/Track ID/CSRM No', 
                                     'Service No.', 'CRM Order Type', 'Status', 'Address', 
-                                    'Customer Name', 'Workzone', 'Contact Number']
+                                    'Customer Name', 'Workzone', 'Contact Number', 'Mitra']
                 else:
                     target_order = ['Date Created', 'Workorder', 'SC Order No/Track ID/CSRM No', 
                                     'Service No.', 'CRM Order Type', 'Status', 'Address', 
@@ -236,10 +241,9 @@ if connection_status and ws:
                 if 'Workzone' in df_final.columns: df_final = df_final.sort_values('Workzone')
                 st.dataframe(df_final[cols_final], use_container_width=True)
 
-                # --- 6. TOMBOL DOWNLOAD & COPY BAWAAN STREAMLIT ---
+                # --- 6. TOMBOL DOWNLOAD & COPY TEXT AREA ---
                 st.markdown("---")
                 
-                # Setup Download
                 excel_buffer = io.BytesIO()
                 with pd.ExcelWriter(excel_buffer, engine='xlsxwriter') as writer:
                     df_final[cols_final].to_excel(writer, index=False)
@@ -251,13 +255,14 @@ if connection_status and ws:
                     use_container_width=True
                 )
                 
-                # Setup Copy Text
                 st.markdown("<br>", unsafe_allow_html=True)
-                st.info("💡 **TIPS COPY CEPAT:** Arahkan kursor ke pojok kanan atas kotak hitam di bawah ini, lalu klik icon **📋 Copy**. Setelah itu kamu bisa langsung Paste (Ctrl+V) ke Excel atau Google Sheets!")
+                st.info("💡 **CARA COPY CEPAT:** Klik di dalam kotak teks di bawah ini, tekan **Ctrl + A** (pilih semua), lalu tekan **Ctrl + C** (copy). Setelah itu langsung Paste (Ctrl + V) di Excel/GSheets!")
                 
                 # Buat data format TSV (Tab Separated Values) agar rapi kalau dipaste ke excel
                 tsv_data = df_final[cols_final].to_csv(index=False, sep='\t')
-                st.code(tsv_data, language="text")
+                
+                # Menampilkan Text Area
+                st.text_area("Data Siap Copy (Format Rapi):", value=tsv_data, height=300)
 
         except Exception as e:
             st.error(f"Terjadi kesalahan: {e}")
