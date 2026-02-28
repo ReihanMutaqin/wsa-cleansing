@@ -227,7 +227,23 @@ if connection_status and ws:
                 c3.markdown(f'<div class="metric-card">🔗 Validasi By<br><h5>{check_col}</h5></div>', unsafe_allow_html=True)
 
                 st.subheader("📋 Preview Data Unik")
-                if 'Workzone' in df_final.columns: df_final = df_final.sort_values('Workzone')
+                
+                # --- SORTING LOGIC: COMPWORK PALING ATAS (KHUSUS MODOROSO) ---
+                if menu == "MODOROSO":
+                    if 'Status' in df_final.columns:
+                        df_final['is_compwork'] = df_final['Status'].astype(str).str.strip().str.upper() == 'COMPWORK'
+                        if 'Workzone' in df_final.columns:
+                            df_final = df_final.sort_values(['is_compwork', 'Workzone'], ascending=[False, True])
+                        else:
+                            df_final = df_final.sort_values('is_compwork', ascending=False)
+                        df_final = df_final.drop(columns=['is_compwork'])
+                    elif 'Workzone' in df_final.columns:
+                        df_final = df_final.sort_values('Workzone')
+                else:
+                    # Sorting normal (cuma by Workzone) buat WSA & WAPPR
+                    if 'Workzone' in df_final.columns:
+                        df_final = df_final.sort_values('Workzone')
+
                 st.dataframe(df_final[cols_final], use_container_width=True)
 
                 st.markdown("---")
