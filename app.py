@@ -8,7 +8,7 @@ from datetime import datetime
 # ==========================================
 # 1. KONFIGURASI HALAMAN & CSS
 # ==========================================
-st.set_page_config(page_title="WSA Multi-Tool Pro", layout="wide")
+st.set_page_config(page_title="TOOLS FILTER TELKOM", layout="wide")
 
 st.markdown("""
     <style>
