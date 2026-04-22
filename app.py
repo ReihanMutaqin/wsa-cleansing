@@ -37,9 +37,9 @@ st.markdown("""
 
 st.markdown("""
 <div class="center-box">
-    <h1>🚧 Website Dipindahkan</h1>
-    <p>Tools ini sudah tidak digunakan lagi.</p>
-    <p>Silakan gunakan versi terbaru di link berikut:</p>
+    <h1>🚧 Website Di Pindahin Ya</h1>
+    <p>Tools Yang Ini Udah Gaguna.</p>
+    <p>Klik Link Di Bawah Aja:</p>
     <a href="https://filter-sakti.vercel.app/" target="_blank" class="btn-link">
         🔗 Buka Website Baru
     </a>
