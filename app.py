@@ -13,6 +13,41 @@ st.set_page_config(page_title="TOOLS FILTER TELKOM", layout="wide")
 # MAINTENANCE MODE
 # ==========================================
 
+st.markdown("""
+    <style>
+    .center-box {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        height: 80vh;
+        text-align: center;
+    }
+    .btn-link {
+        background: linear-gradient(45deg, #00d4ff, #008fb3);
+        padding: 12px 25px;
+        border-radius: 10px;
+        color: black;
+        font-weight: bold;
+        text-decoration: none;
+        margin-top: 20px;
+        display: inline-block;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+st.markdown("""
+<div class="center-box">
+    <h1>🚧 Website Di Pindahin Ya</h1>
+    <p>Tools Yang Ini Udah Gaguna.</p>
+    <p>Klik Link Di Bawah Aja:</p>
+    <a href="https://filter-sakti.vercel.app/" target="_blank" class="btn-link">
+        🔗 Buka Website Baru
+    </a>
+</div>
+""", unsafe_allow_html=True)
+
+st.stop()
 
 
 
