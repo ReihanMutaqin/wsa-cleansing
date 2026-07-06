@@ -36,18 +36,18 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-st.markdown("""
-<div class="center-box">
-    <h1>🚧 Website Di Pindahin Ya</h1>
-    <p>Tools Yang Ini Udah Gaguna.</p>
-    <p>Klik Link Di Bawah Aja:</p>
-    <a href="https://filter-sakti.vercel.app/" target="_blank" class="btn-link">
-        🔗 Buka Website Baru
-    </a>
-</div>
-""", unsafe_allow_html=True)
+# st.markdown("""
+# <div class="center-box">
+#     <h1>🚧 Website Di Pindahin Ya</h1>
+#     <p>Tools Yang Ini Udah Gaguna.</p>
+#     <p>Klik Link Di Bawah Aja:</p>
+#     <a href="https://filter-sakti.vercel.app/" target="_blank" class="btn-link">
+#         🔗 Buka Website Baru
+#     </a>
+# </div>
+# """, unsafe_allow_html=True)
 
-st.stop()
+# st.stop()
 
 
 
